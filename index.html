@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PT 일지">
+<title>PT 일지 - BODY SPECTRUM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Noto Sans KR',sans-serif;background:#e8e8e8;padding:10px;padding-bottom:80px;-webkit-user-select:none;user-select:none;}
+
+/* ─── Member Bar ─── */
+.member-bar{max-width:780px;margin:0 auto 8px;background:#1a1a1a;border-radius:12px;padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.member-bar label{color:#00d4aa;font-size:12px;font-weight:700;letter-spacing:1px;}
+.member-select{padding:6px 12px;border-radius:6px;border:1px solid #444;background:#2a2a2a;color:white;font-size:13px;font-weight:700;font-family:'Noto Sans KR',sans-serif;outline:none;cursor:pointer;min-width:140px;}
+.member-select:focus{border-color:#00d4aa;}
+.member-add-btn{padding:6px 12px;border-radius:6px;border:1px solid #444;background:transparent;color:#00d4aa;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.member-add-btn:hover{background:#00d4aa;color:#1a1a1a;}
+.member-status{font-size:11px;color:#666;margin-left:auto;}
+
+.sheet{max-width:780px;margin:0 auto;background:white;padding:28px 30px 20px;box-shadow:0 2px 20px rgba(0,0,0,0.1);}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}
+.header h1{font-size:32px;font-weight:900;color:#1a1a1a;letter-spacing:-1px;}
+.logo{font-size:14px;font-weight:800;color:#1a1a1a;display:flex;align-items:center;gap:6px;}
+.logo-icon{width:22px;height:22px;background:#1a1a1a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:900;}
+.session-grid{display:flex;flex-wrap:wrap;gap:0;margin-bottom:10px;}
+.session-num{width:35px;height:26px;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#555;margin-right:-1px;margin-bottom:-1px;cursor:pointer;background:transparent;}
+.session-num.marked{background:#e0e0e0;color:#333;font-weight:800;}
+.memo-box{border:1px solid #ccc;min-height:45px;margin-bottom:10px;padding:8px;font-size:13px;color:#333;outline:none;}
+.info-table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:13px;}
+.info-table td{border:1px solid #ccc;padding:6px 10px;vertical-align:middle;}
+.info-table .lc{background:#f5f5f5;font-weight:700;color:#333;width:85px;text-align:center;font-size:12px;}
+.info-table .vc{min-width:100px;color:#333;outline:none;}
+.info-table .bp{font-size:11px;line-height:1.8;color:#555;}
+.hydration-row{display:flex;gap:4px;}
+.h-dot{width:20px;height:20px;border-radius:50%;border:2px solid #b0d4f1;cursor:pointer;transition:all 0.15s;}
+.h-dot.filled{background:#64b5f6;border-color:#42a5f5;}
+.tp-selector{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.tp-selector label{font-size:12px;font-weight:700;color:#333;}
+.tp-select{padding:6px 12px;border:2px solid #1a1a1a;border-radius:6px;font-size:13px;font-weight:700;font-family:'Noto Sans KR',sans-serif;background:white;color:#1a1a1a;outline:none;cursor:pointer;max-width:300px;}
+.tp-select:focus{border-color:#e53935;}
+.tp-exercise-name{font-size:11px;color:#888;margin-left:4px;}
+.tp-header{background:#1a1a1a;color:white;text-align:center;padding:8px;font-size:16px;font-weight:800;letter-spacing:3px;}
+.tp-photos-wrap{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #ccc;border-top:none;}
+.tp-panel{position:relative;overflow:hidden;min-height:180px;background:#f5f5f5;touch-action:none;}
+.tp-panel:first-child{border-right:1px solid #ccc;}
+.tp-panel img{width:100%;display:block;pointer-events:none;user-select:none;-webkit-user-drag:none;}
+.tp-panel-label{position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.65);color:white;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:3px;z-index:30;pointer-events:none;}
+.tp-upload-btn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.06);border:2px dashed #bbb;border-radius:12px;padding:24px 18px;text-align:center;cursor:pointer;color:#999;font-size:13px;z-index:5;}
+.tp-upload-btn:hover{border-color:#666;color:#666;}
+.tp-upload-btn .icon{font-size:28px;margin-bottom:4px;}
+.ann{position:absolute;background:rgba(255,255,255,0.92);border:2px solid;border-radius:4px;padding:3px 7px;font-size:11px;font-weight:700;cursor:grab;white-space:nowrap;z-index:20;box-shadow:1px 1px 4px rgba(0,0,0,0.15);touch-action:none;line-height:1.4;display:flex;align-items:center;gap:3px;}
+.ann:active{cursor:grabbing;}
+.ann .n{display:inline-flex;width:17px;height:17px;border-radius:50%;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:white;flex-shrink:0;}
+.ann .del-ann{display:none;width:15px;height:15px;border-radius:50%;border:none;background:rgba(0,0,0,0.15);color:#888;font-size:9px;cursor:pointer;align-items:center;justify-content:center;margin-left:2px;flex-shrink:0;}
+.ann:hover .del-ann{display:inline-flex;}
+.ann .del-ann:hover{background:#e53935;color:white;}
+.dot{position:absolute;width:10px;height:10px;border-radius:50%;border:2px solid white;cursor:grab;z-index:15;transform:translate(-50%,-50%);touch-action:none;box-shadow:0 0 4px rgba(0,0,0,0.3);}
+.dot:active{cursor:grabbing;}
+.tp-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;}
+.cues{margin-top:8px;padding:8px 10px;background:#fafafa;border:1px solid #e0e0e0;border-radius:4px;}
+.cues-t{font-size:11px;font-weight:800;letter-spacing:2px;color:#e53935;margin-bottom:5px;}
+.cues-sub-row{display:flex;align-items:center;justify-content:space-between;margin-top:6px;margin-bottom:3px;}
+.cues-sub{font-size:10px;font-weight:600;}
+.add-cue-btn{font-size:10px;padding:2px 8px;border:1px solid #ccc;border-radius:4px;background:white;color:#555;cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-weight:600;}
+.add-cue-btn:hover{background:#e53935;color:white;border-color:#e53935;}
+.cue{display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:11px;color:#444;line-height:1.5;}
+.cue .cn{width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:white;flex-shrink:0;}
+.cue-text{flex:1;outline:none;border:none;background:transparent;font-size:11px;color:#444;font-family:'Noto Sans KR',sans-serif;font-weight:500;border-bottom:1px solid transparent;padding:1px 2px;}
+.cue-text:focus{border-bottom-color:#e53935;background:#fff8f8;}
+.cue-del{width:16px;height:16px;border:none;border-radius:50%;background:transparent;color:#ccc;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.cue-del:hover{background:#e53935;color:white;}
+.ex-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;}
+.ex-table th{background:#1a1a1a;color:white;padding:7px 10px;font-weight:700;font-size:12px;letter-spacing:1px;border:1px solid #1a1a1a;}
+.ex-table td{border:1px solid #ccc;padding:8px 10px;height:34px;outline:none;color:#333;}
+
+/* ─── Toolbar ─── */
+.toolbar{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:rgba(30,30,30,0.95);padding:8px 14px;border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,0.4);z-index:500;}
+.tb{padding:7px 14px;border-radius:8px;border:1px solid #444;background:transparent;color:white;font-size:12px;font-weight:600;font-family:'Noto Sans KR',sans-serif;cursor:pointer;white-space:nowrap;transition:all 0.2s;}
+.tb:hover{background:#00d4aa;color:#111;border-color:#00d4aa;}
+.tb.save-btn{background:#4CAF50;color:white;border-color:#4CAF50;}
+.tb.save-btn:hover{background:#388E3C;}
+.tb.cap{background:#00d4aa;color:#111;border-color:#00d4aa;}
+.tb.saving{background:#ffa502;color:#111;border-color:#ffa502;pointer-events:none;}
+
+/* ─── Capture ─── */
+body.capture .toolbar{display:none!important;}
+body.capture .dot{display:none!important;}
+body.capture .ann{cursor:default!important;}
+body.capture .ann .del-ann{display:none!important;}
+body.capture .tp-upload-btn{display:none!important;}
+body.capture .tp-selector{display:none!important;}
+body.capture .add-cue-btn{display:none!important;}
+body.capture .cue-del{display:none!important;}
+body.capture .cue-text{border-bottom-color:transparent!important;background:transparent!important;}
+body.capture .member-bar{display:none!important;}
+
+/* ─── Toast ─── */
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:white;padding:16px 28px;border-radius:14px;font-size:15px;font-weight:600;z-index:9999;display:none;text-align:center;backdrop-filter:blur(10px);}
+.toast.show{display:block;animation:fadeInOut 2.5s ease;}
+@keyframes fadeInOut{0%{opacity:0;transform:translate(-50%,-50%) scale(0.9);}15%{opacity:1;transform:translate(-50%,-50%) scale(1);}75%{opacity:1;}100%{opacity:0;}}
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+
+<!-- Member Bar -->
+<div class="member-bar" id="memberBar">
+  <label>👤 회원:</label>
+  <select class="member-select" id="memberSelect" onchange="onMemberChange()">
+    <option value="">회원 선택...</option>
+  </select>
+  <button class="member-add-btn" onclick="promptAddMember()">＋ 새 회원</button>
+  <span class="member-status" id="memberStatus"></span>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="header"><h1>PT 일지</h1><div class="logo"><div class="logo-icon">B</div>BODY SPECTRUM</div></div>
+  <div class="session-grid" id="sg"></div>
+  <div class="memo-box" contenteditable="true"></div>
+  <table class="info-table">
+    <tr><td class="lc">DATE</td><td class="vc" contenteditable="true" id="dateCell" style="font-weight:700;font-size:18px;"></td><td class="lc">HYDRATION</td><td class="vc"><div class="hydration-row" id="hr"></div></td></tr>
+    <tr><td class="lc">SLEEP</td><td class="vc" contenteditable="true" id="sleepCell"></td><td class="lc">SUPPLEMENT</td><td class="vc" contenteditable="true" id="suppCell"></td></tr>
+    <tr><td class="lc">BODY<br>PART</td><td class="bp"><label><input type="checkbox"> CARDIO</label>&nbsp;<label><input type="checkbox"> FULL BODY</label>&nbsp;<label><input type="checkbox"> CORE</label><br><label><input type="checkbox"> ARMS</label>&nbsp;<label><input type="checkbox"> BACK</label>&nbsp;<label><input type="checkbox"> CHEST</label><br><label><input type="checkbox"> LEGS</label>&nbsp;<label><input type="checkbox"> SHOULDERS</label>&nbsp;<label><input type="checkbox"> OTHER</label></td><td class="lc">WARM-UP</td><td class="vc" contenteditable="true" id="warmupCell"></td></tr>
+    <tr><td colspan="2"></td><td class="lc">COOL DOWN</td><td class="vc" contenteditable="true" id="cooldownCell"></td></tr>
+  </table>
+  <div class="tp-selector">
+    <label>🎯 운동 선택:</label>
+    <select class="tp-select" id="exSelect" onchange="onSelectExercise()"><option value="">-- 운동을 선택하세요 --</option></select>
+    <span class="tp-exercise-name" id="exNameEn"></span>
+  </div>
+  <div class="tp-header">TEACHING POINT</div>
+  <div class="tp-photos-wrap">
+    <div class="tp-panel" id="panelL"><div class="tp-panel-label">START POSITION</div><img id="imgL" style="display:none;"/><div class="tp-upload-btn" id="uplL" onclick="document.getElementById('fileL').click()"><div class="icon">📷</div>시작 자세<input type="file" id="fileL" accept="image/*" style="display:none" onchange="loadImg('L',event)"></div><svg class="tp-svg" id="svgL"></svg></div>
+    <div class="tp-panel" id="panelR"><div class="tp-panel-label">EXECUTION</div><img id="imgR" style="display:none;"/><div class="tp-upload-btn" id="uplR" onclick="document.getElementById('fileR').click()"><div class="icon">📷</div>수행 자세<input type="file" id="fileR" accept="image/*" style="display:none" onchange="loadImg('R',event)"></div><svg class="tp-svg" id="svgR"></svg></div>
+  </div>
+  <div class="cues" id="cues" style="display:none;"><div class="cues-t">KEY FORM CUES</div><div id="cuesContent"></div></div>
+  <table class="ex-table">
+    <thead><tr><th style="width:42%">NAME</th><th style="width:22%">Kg</th><th style="width:36%">SET/REPS</th></tr></thead>
+    <tbody id="exB"><tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr><tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr><tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr><tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr><tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr><tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr></tbody>
+  </table>
+</div>
+
+<div class="toolbar" id="toolbar">
+  <button class="tb" onclick="addExRow()">＋ 운동</button>
+  <button class="tb save-btn" id="saveBtn" onclick="saveToSheet()">💾 저장</button>
+  <button class="tb cap" id="capBtn" onclick="captureAndSave()">📸 캡처</button>
+</div>
+
+<script>
+// ═══════════════════════════════════
+// Google Sheets API URL
+// ═══════════════════════════════════
+const API_URL = 'https://script.google.com/macros/s/AKfycbxqRTS49BJSImR5ybOY7F4LdURzPoQID0fnF0JOCyo7e-pnm2xUf45HBL8u3PISV2zCDw/exec';
+
+// ═══════════════════════════════════
+// Exercise DB
+// ═══════════════════════════════════
+const DB={'바벨 플랫 벤치프레스':{en:'Barbell Flat Bench Press',cat:'가슴',start:['견갑골(어깨뼈)을 모아 아래로 당긴다','가슴을 활짝 펴고 아치를 만든다','발바닥을 바닥에 단단히 고정한다','그립은 어깨 너비의 약 1.5배'],exec:['바를 가슴 중앙(유두 라인)으로 내린다','팔꿈치 각도 약 75도 유지','가슴 수축을 느끼며 밀어 올린다','엉덩이가 벤치에서 뜨지 않도록!']},'바벨 인클라인 벤치프레스':{en:'Barbell Incline Bench Press',cat:'가슴',start:['벤치 각도 30~45도로 설정','견갑골을 모으고 등을 밀착시킨다','그립은 어깨보다 약간 넓게','발바닥을 바닥에 고정한다'],exec:['바를 쇄골과 유두 사이로 내린다','팔꿈치가 과도하게 벌어지지 않게','상부 가슴 수축을 느끼며 올린다','손목이 꺾이지 않도록 주의']},'덤벨 플랫 벤치프레스':{en:'Dumbbell Flat Bench Press',cat:'가슴',start:['견갑골을 모으고 가슴을 편다','덤벨을 가슴 위에서 팔을 펴서 시작','발바닥을 바닥에 단단히 고정','손목은 중립 유지'],exec:['덤벨을 가슴 양옆으로 천천히 내린다','팔꿈치 약 75도 유지','가슴 수축으로 위로 밀어 올린다','상단에서 덤벨을 살짝 모아준다']},'덤벨 플라이':{en:'Dumbbell Fly',cat:'가슴',start:['벤치에 누워 덤벨을 가슴 위로 든다','팔꿈치를 살짝 구부린 상태 유지','견갑골을 모으고 가슴을 편다','발바닥 바닥에 고정'],exec:['큰 나무를 안듯 호 모양 궤적 유지','가슴 높이까지 양팔을 벌린다','가슴 스트레칭을 느끼고 수축으로 모은다','팔꿈치 각도를 일정하게 유지!']},'펙덱 플라이 머신':{en:'Pec Deck Fly',cat:'가슴',start:['등을 패드에 밀착시킨다','시트 높이: 손잡이가 가슴 중앙 높이','가슴을 펴고 어깨가 말리지 않게','발을 바닥에 안정적으로 놓는다'],exec:['가슴 수축으로 양팔을 가운데로 모은다','최대 수축 지점에서 1~2초 버틴다','천천히 벌리며 가슴 스트레칭','어깨가 앞으로 말리지 않도록 주의']},'케이블 크로스오버':{en:'Cable Crossover',cat:'가슴',start:['양쪽 케이블을 높은 위치에 설정','한 발을 앞으로 내딛어 안정자세','약간 앞으로 기울인다','팔꿈치를 살짝 구부린다'],exec:['양 손잡이를 아래 앞쪽으로 모은다','손이 만나는 지점에서 1~2초 수축','천천히 원래 위치로 돌아간다','풀리 높이로 자극 부위 조절 가능']},'딥스':{en:'Dips (Chest)',cat:'가슴',start:['딥스바를 잡고 팔을 펴서 몸을 든다','상체를 약 30도 앞으로 기울인다','코어에 힘을 준다','어깨를 아래로 내려 안정시킨다'],exec:['팔꿈치를 구부리며 천천히 내린다','팔꿈치 90도가 될때까지 내린다','가슴 하부 수축을 느끼며 올린다','상체를 세우면 삼두 운동이 됨 주의!']},'바벨 벤트오버 로우':{en:'Barbell Bent-Over Row',cat:'등',start:['상체를 약 45도로 숙인다','허리를 곧게 유지 (중립 척추)','무릎을 살짝 구부린다','그립은 어깨 너비로 잡는다'],exec:['바를 배꼽 방향으로 당긴다','견갑골을 모으며 수축한다','팔꿈치를 뒤로 보낸다','상체 각도를 일정하게 유지!']},'T-바 로우':{en:'T-Bar Row',cat:'등',start:['시선은 전방 바닥 약 2m 응시','허리를 곧게 유지 (중립 척추)','상체를 약 45도로 숙여 고정','무릎 살짝 굽혀 하체를 고정'],exec:['견갑골을 모으며 팔꿈치를 뒤로 당긴다','바를 배꼽(명치) 방향으로 당긴다','코어 긴장 유지, 반동 금지!','천천히 내리며 광배근 스트레칭']},'원암 덤벨 로우':{en:'One-Arm Dumbbell Row',cat:'등',start:['한 손과 같은 쪽 무릎을 벤치에 올린다','허리를 곧게, 등은 바닥과 평행','반대 손으로 덤벨을 잡고 팔을 늘어뜨린다','코어에 힘을 주어 상체 회전 방지'],exec:['팔꿈치를 천장으로 올린다는 느낌','견갑골을 조이며 수축한다','덤벨을 엉덩이 방향으로 당긴다','상체가 회전하지 않도록 주의!']},'렛 풀다운':{en:'Lat Pulldown',cat:'등',start:['허벅지를 패드 아래에 고정한다','넓은 그립(오버그립)으로 바를 잡는다','가슴을 펴고 약간 뒤로 기울인다','어깨를 아래로 내려 광배근 활성화'],exec:['바를 쇄골(가슴 앞)으로 당긴다','견갑골을 아래로 당기며 수축','천천히 올려 완전히 스트레칭','목 뒤로 당기면 안됨! 가슴 앞으로!']},'시티드 케이블 로우':{en:'Seated Cable Row',cat:'등',start:['상체는 바르게 세우고 코어에 힘','팔을 어깨보다 위로 해서 손잡이를 잡는다','발을 풋 플레이트에 단단히 딛는다','가슴을 펴고 등을 곧게 유지'],exec:['바를 하복부(배꼽) 방향으로 당긴다','견갑골을 모으며 어깨를 뒤로','팔꿈치를 대각선 아래로 당겨준다','상체를 과도하게 앞뒤로 흔들지 않기!']},'풀업':{en:'Pull-Up',cat:'등',start:['오버그립으로 어깨보다 넓게 잡는다','전신을 늘어뜨린 데드행 자세','견갑골을 아래로 당겨 활성화','코어에 힘을 주어 몸 흔들림 방지'],exec:['턱이 바 위로 올라올 때까지 당긴다','팔꿈치를 아래로 당긴다는 느낌','천천히 내려와 완전히 스트레칭','반동을 쓰지 말고 근육 힘으로만!']},'데드리프트':{en:'Conventional Deadlift',cat:'등',start:['발을 엉덩이 너비로, 바에 가깝게 선다','엉덩이를 뒤로 밀며 바를 잡는다','가슴을 펴고 허리를 곧게 유지','어깨가 바 바로 위에 위치'],exec:['엉덩이와 무릎을 동시에 펴며 올린다','바는 항상 몸에 가까이 붙여야!','완전히 선 자세에서 둔근 수축','허리가 아닌 엉덩이와 다리로 들어올린다']},'바벨 오버헤드 프레스':{en:'Barbell Overhead Press',cat:'어깨',start:['바를 쇄골 앞(어깨 높이)에서 잡는다','발은 어깨 너비로 벌린다','코어에 힘을 주어 허리 보호','팔꿈치를 살짝 앞으로 위치'],exec:['바를 머리 위로 직선으로 밀어 올린다','바가 이마 지날 때 머리를 살짝 앞으로','팔을 완전히 펴고 바가 귀 옆에','허리를 과도하게 젖히지 않기!']},'덤벨 숄더 프레스':{en:'Dumbbell Shoulder Press',cat:'어깨',start:['덤벨을 귀 높이에서 들고 시작','등을 벤치에 밀착 (시티드의 경우)','코어에 힘을 주어 안정성 확보','손목은 중립 유지'],exec:['머리 위로 밀어 올린다','상단에서 덤벨을 살짝 모아준다','천천히 귀 높이까지 내린다','등을 과도하게 젖히지 않기!']},'덤벨 래터럴 레이즈':{en:'Dumbbell Lateral Raise',cat:'어깨',start:['양손에 가벼운 덤벨을 잡고 몸 옆에','팔꿈치를 살짝 구부린 상태 유지','상체를 약간 앞으로 기울인다','어깨에 힘을 미리 느껴둔다'],exec:['양팔을 옆으로 어깨 높이까지 올린다','새끼손가락이 약간 위를 향하게','반동을 쓰지 않는다!','천천히 내리며 텐션 유지']},'페이스 풀':{en:'Face Pull',cat:'어깨',start:['케이블을 눈 높이에 설정','로프를 양손으로 잡는다','한 발을 뒤로 빼고 안정 자세','어깨를 뒤로 당겨 활성화'],exec:['로프를 얼굴 양옆으로 당긴다','팔꿈치를 뒤로 보낸다','최대 수축에서 외회전 추가','가벼운 무게, 많은 반복이 핵심!']},'아놀드 프레스':{en:'Arnold Press',cat:'어깨',start:['덤벨을 어깨 앞에서 손바닥이 나를 향하게','팔꿈치를 몸 앞에 모은다','등을 곧게 세운다','코어에 힘을 준다'],exec:['밀어 올리며 손바닥이 앞을 향하도록 회전','머리 위에서 완전히 편다','역방향으로 돌리며 내린다','부드러운 회전이 핵심!']},'바벨 백 스쿼트':{en:'Barbell Back Squat',cat:'하체',start:['바를 승모근 위에 올린다','발을 어깨 너비, 발끝 약간 바깥','가슴을 펴고 코어에 힘을 준다','시선은 전방 2~3m를 향한다'],exec:['엉덩이를 뒤로 빼며 앉는다','허벅지가 최소 바닥과 평행까지','무릎이 발끝 방향을 향하도록!','발바닥 전체로 밀어 올라온다']},'레그 프레스':{en:'Leg Press',cat:'하체',start:['등을 패드에 완전히 밀착시킨다','발을 발판에 어깨 너비로 올린다','무릎과 발끝이 같은 방향','안전장치를 확인한다'],exec:['무릎이 90도가 될 때까지 내린다','발바닥 전체로 밀어 올린다','무릎을 완전히 잠그지 않는다','발 위치로 자극 부위 조절 가능']},'루마니안 데드리프트':{en:'Romanian Deadlift',cat:'하체',start:['바를 어깨 너비로 잡고 바로 선다','무릎을 살짝 구부린 채 유지','가슴을 펴고 허리를 곧게','코어에 힘을 준다'],exec:['엉덩이를 뒤로 밀며 상체를 숙인다','바를 다리에 가깝게 붙여 내린다','햄스트링 스트레칭을 느낀다','허리를 둥글게 말면 안됨!']},'바벨 힙 쓰러스트':{en:'Barbell Hip Thrust',cat:'하체',start:['등 상부를 벤치에 기댄다','바벨을 골반 위에 올린다','발을 바닥에 단단히 딛는다','턱을 당기고 시선을 앞으로'],exec:['엉덩이를 위로 밀어 올린다','상체와 허벅지가 일직선이 되도록','최고점에서 둔근을 강하게 쥐어짠다','천천히 내린다']},'불가리안 스플릿 스쿼트':{en:'Bulgarian Split Squat',cat:'하체',start:['뒷발등을 벤치에 올려놓는다','앞발로 체중을 지탱한다','상체를 곧게 세운다','코어에 힘을 준다'],exec:['앞 허벅지가 바닥과 평행까지 내려간다','앞 무릎이 발끝을 넘지 않도록','앞발로 밀어 올라온다','균형을 유지하며 천천히!']},'바벨 컬':{en:'Barbell Curl',cat:'이두',start:['바를 어깨 너비 언더그립으로 잡는다','팔꿈치를 몸 옆에 고정한다','상체를 곧게 세운다','어깨를 아래로 내려 안정시킨다'],exec:['바를 어깨 높이까지 컬한다','이두근 수축을 느낀다','천천히 내린다','반동 금지!']},'해머 컬':{en:'Hammer Curl',cat:'이두',start:['덤벨을 손바닥이 마주 보게 잡는다','팔꿈치를 몸에 고정','상체를 곧게 세운다','어깨는 자연스럽게 내린다'],exec:['중립 그립 유지하며 컬한다','팔꿈치가 앞으로 나오지 않게','천천히 내린다','팔 두께를 키우는 핵심 운동!']},'케이블 푸시다운':{en:'Cable Pushdown',cat:'삼두',start:['높은 풀리에 바/로프를 부착','팔꿈치를 몸에 고정한다','상체를 약간 앞으로 기울인다','어깨를 내려 안정시킨다'],exec:['바를 아래로 밀어 팔을 완전히 편다','삼두근 수축을 느낀다','천천히 올린다','로프: 하단에서 양쪽으로 벌리기!']},'스컬크러셔':{en:'Skull Crusher',cat:'삼두',start:['벤치에 누워 EZ바를 좁은 그립으로','팔을 펴서 바를 들어올린다','팔꿈치는 어깨 너비로 고정','견갑골을 모아 안정적 기반 확보'],exec:['팔꿈치 고정 후 바를 이마쪽으로 내린다','삼두근 스트레칭을 느낀다','삼두근으로 밀어 올린다','머리 뒤쪽으로 내리면 장두 자극 UP']},'케이블 크런치':{en:'Cable Crunch',cat:'코어',start:['높은 풀리에 로프를 부착','무릎을 꿇고 로프를 머리 양옆에 고정','엉덩이 위치를 고정한다','복근에 미리 힘을 느껴둔다'],exec:['복근을 수축하며 바닥으로 구부린다','엉덩이가 움직이면 안된다!','천천히 돌아온다','순수하게 복근으로만!']},'행잉 레그 레이즈':{en:'Hanging Leg Raise',cat:'코어',start:['풀업 바에 매달린다','다리를 모은다','어깨를 아래로 당겨 안정','몸 흔들림을 최소화한다'],exec:['복근 힘으로 다리를 들어올린다','가능하면 발끝이 바 높이까지','천천히 내린다','반동 최소화!']}};
+
+// Build dropdown
+const sel=document.getElementById('exSelect');let lc='';Object.keys(DB).forEach(n=>{const d=DB[n];if(d.cat!==lc){const og=document.createElement('optgroup');og.label=d.cat;sel.appendChild(og);lc=d.cat;}const o=document.createElement('option');o.value=n;o.textContent=n;sel.lastChild.appendChild(o);});
+
+const CL='#e53935',CR='#1565C0';let ptsL=[],ptsR=[],idC=0;
+function nid(){return 'p'+(++idC);}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show';setTimeout(()=>t.className='toast',2500);}
+
+// ═══════════════════════════════════
+// GOOGLE SHEETS API
+// ═══════════════════════════════════
+async function apiCall(data){
+  try{
+    const res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(data)});
+    return await res.json();
+  }catch(err){
+    console.error('API Error:',err);
+    return {success:false,error:err.message};
+  }
+}
+
+// Load members on start
+async function loadMembers(){
+  document.getElementById('memberStatus').textContent='로딩중...';
+  try{
+    const res=await fetch(API_URL+'?action=get_members');
+    const data=await res.json();
+    if(data.success){
+      const sel=document.getElementById('memberSelect');
+      sel.innerHTML='<option value="">회원 선택...</option>';
+      data.members.forEach(m=>{
+        const o=document.createElement('option');
+        o.value=m.name;
+        o.textContent=m.name+' ('+( m.totalSessions||0)+'회차)';
+        sel.appendChild(o);
+      });
+      document.getElementById('memberStatus').textContent=data.members.length+'명 등록';
+    }
+  }catch(err){
+    document.getElementById('memberStatus').textContent='오프라인';
+  }
+}
+
+function onMemberChange(){
+  const name=document.getElementById('memberSelect').value;
+  if(name) document.getElementById('memberStatus').textContent=name+' 선택됨';
+}
+
+async function promptAddMember(){
+  const name=prompt('새 회원 이름을 입력하세요:');
+  if(!name||!name.trim()) return;
+  toast('⏳ 회원 등록 중...');
+  const res=await apiCall({action:'add_member',member:name.trim()});
+  if(res.success){
+    toast('✅ '+name+' 등록 완료!');
+    loadMembers();
+  }else{
+    toast('❌ '+( res.error||'등록 실패'));
+  }
+}
+
+// Save to Google Sheets
+async function saveToSheet(){
+  const member=document.getElementById('memberSelect').value;
+  if(!member){toast('⚠️ 회원을 먼저 선택하세요!');return;}
+  const date=document.getElementById('dateCell').textContent.trim();
+  if(!date){toast('⚠️ 날짜를 입력하세요!');return;}
+  const btn=document.getElementById('saveBtn');
+  btn.textContent='⏳ 저장중...';btn.classList.add('saving');
+  // Gather exercises
+  const rows=document.getElementById('exB').querySelectorAll('tr');
+  const exercises=[];
+  rows.forEach(r=>{
+    const cells=r.querySelectorAll('td');
+    const name=(cells[0]||{}).textContent?.trim();
+    if(name) exercises.push({name:name,kg:(cells[1]||{}).textContent?.trim(),setReps:(cells[2]||{}).textContent?.trim()});
+  });
+  // Gather teaching points
+  const tps=[];
+  ptsL.forEach(p=>tps.push('[시작] '+p.text));
+  ptsR.forEach(p=>tps.push('[수행] '+p.text));
+  const data={
+    action:'save_log',
+    member:member,
+    date:date,
+    sleep:document.getElementById('sleepCell').textContent.trim(),
+    supplement:document.getElementById('suppCell').textContent.trim(),
+    warmup:document.getElementById('warmupCell').textContent.trim(),
+    cooldown:document.getElementById('cooldownCell').textContent.trim(),
+    exerciseName:document.getElementById('exSelect').value,
+    exercises:exercises,
+    teachingPoints:tps
+  };
+  const res=await apiCall(data);
+  if(res.success){
+    toast('✅ 구글 시트에 저장 완료!');
+  }else{
+    toast('❌ 저장 실패: '+(res.error||''));
+  }
+  btn.textContent='💾 저장';btn.classList.remove('saving');
+}
+
+// ═══════════════════════════════════
+// Teaching Points
+// ═══════════════════════════════════
+function onSelectExercise(){const n=sel.value;if(!n)return;const d=DB[n];document.getElementById('exNameEn').textContent=d.en;ptsL=d.start.map((t,i)=>({id:nid(),text:t,dotX:50+(i%2)*10,dotY:15+i*22,lblX:3,lblY:5+i*24}));ptsR=d.exec.map((t,i)=>({id:nid(),text:t,dotX:50+(i%2)*10,dotY:15+i*22,lblX:3,lblY:5+i*24}));renderAnns('L');renderAnns('R');renderCues();}
+function loadImg(s,e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const img=document.getElementById('img'+s);img.onload=()=>{img.style.display='block';document.getElementById('upl'+s).style.display='none';renderAnns(s);renderCues();};img.src=ev.target.result;};r.readAsDataURL(f);}
+function renderAnns(s){const p=document.getElementById('panel'+s),sv=document.getElementById('svg'+s),pts=s==='L'?ptsL:ptsR,c=s==='L'?CL:CR;p.querySelectorAll('.ann,.dot').forEach(e=>e.remove());sv.innerHTML='';pts.forEach((pt,i)=>{const l=document.createElement('div');l.className='ann';l.style.borderColor=c;l.style.color=c;l.style.left=pt.lblX+'%';l.style.top=pt.lblY+'%';l.dataset.id=pt.id;l.dataset.side=s;l.innerHTML='<span class="n" style="background:'+c+'">'+(i+1)+'</span><span class="ann-txt">'+pt.text+'</span><button class="del-ann" onclick="delPt(\''+s+'\',\''+pt.id+'\')">✕</button>';mkD(l,pt,'lbl',s);p.appendChild(l);const d=document.createElement('div');d.className='dot';d.style.background=c;d.style.left=pt.dotX+'%';d.style.top=pt.dotY+'%';mkD(d,pt,'dot',s);p.appendChild(d);const ln=document.createElementNS('http://www.w3.org/2000/svg','line');ln.id='ln-'+pt.id;ln.setAttribute('x1',pt.lblX+'%');ln.setAttribute('y1',pt.lblY+'%');ln.setAttribute('x2',pt.dotX+'%');ln.setAttribute('y2',pt.dotY+'%');ln.setAttribute('stroke',c);ln.setAttribute('stroke-width','1.5');ln.setAttribute('stroke-opacity','0.6');sv.appendChild(ln);});}
+function mkD(el,pt,t,s){let sx,sy,spx,spy;function st(e){if(document.body.classList.contains('capture'))return;e.preventDefault();e.stopPropagation();const tc=e.touches?e.touches[0]:e;sx=tc.clientX;sy=tc.clientY;spx=t==='dot'?pt.dotX:pt.lblX;spy=t==='dot'?pt.dotY:pt.lblY;function mv(ev){ev.preventDefault();const m=ev.touches?ev.touches[0]:ev;const r=document.getElementById('panel'+s).getBoundingClientRect();const dx=((m.clientX-sx)/r.width)*100,dy=((m.clientY-sy)/r.height)*100;let nx=Math.max(0,Math.min(95,spx+dx)),ny=Math.max(0,Math.min(95,spy+dy));if(t==='dot'){pt.dotX=nx;pt.dotY=ny;}else{pt.lblX=nx;pt.lblY=ny;}el.style.left=nx+'%';el.style.top=ny+'%';const ln=document.getElementById('ln-'+pt.id);if(ln){ln.setAttribute('x1',pt.lblX+'%');ln.setAttribute('y1',pt.lblY+'%');ln.setAttribute('x2',pt.dotX+'%');ln.setAttribute('y2',pt.dotY+'%');}}function en(){document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',en);document.removeEventListener('touchmove',mv);document.removeEventListener('touchend',en);}document.addEventListener('mousemove',mv,{passive:false});document.addEventListener('mouseup',en);document.addEventListener('touchmove',mv,{passive:false});document.addEventListener('touchend',en);}el.addEventListener('mousedown',st);el.addEventListener('touchstart',st,{passive:false});}
+function delPt(s,id){if(s==='L')ptsL=ptsL.filter(p=>p.id!==id);else ptsR=ptsR.filter(p=>p.id!==id);renderAnns(s);renderCues();}
+function addPt(s){const pts=s==='L'?ptsL:ptsR;pts.push({id:nid(),text:'새 포인트 입력',dotX:50,dotY:50,lblX:10,lblY:10+pts.length*20});renderAnns(s);renderCues();}
+function renderCues(){document.getElementById('cues').style.display='block';const c=document.getElementById('cuesContent');c.innerHTML='';const sL=document.createElement('div');sL.className='cues-sub-row';sL.innerHTML='<span class="cues-sub" style="color:'+CL+'">▎시작 자세 (START)</span><button class="add-cue-btn" onclick="addPt(\'L\')">＋ 추가</button>';c.appendChild(sL);ptsL.forEach((p,i)=>{const r=document.createElement('div');r.className='cue';r.innerHTML='<div class="cn" style="background:'+CL+'">'+(i+1)+'</div><input class="cue-text" value="'+p.text+'" oninput="upTxt(\'L\',\''+p.id+'\',this.value)"/><button class="cue-del" onclick="delPt(\'L\',\''+p.id+'\')">✕</button>';c.appendChild(r);});const sR=document.createElement('div');sR.className='cues-sub-row';sR.innerHTML='<span class="cues-sub" style="color:'+CR+'">▎수행 자세 (EXECUTION)</span><button class="add-cue-btn" onclick="addPt(\'R\')">＋ 추가</button>';c.appendChild(sR);ptsR.forEach((p,i)=>{const r=document.createElement('div');r.className='cue';r.innerHTML='<div class="cn" style="background:'+CR+'">'+(i+1)+'</div><input class="cue-text" value="'+p.text+'" oninput="upTxt(\'R\',\''+p.id+'\',this.value)"/><button class="cue-del" onclick="delPt(\'R\',\''+p.id+'\')">✕</button>';c.appendChild(r);});}
+function upTxt(s,id,v){const pts=s==='L'?ptsL:ptsR;const p=pts.find(x=>x.id===id);if(p){p.text=v;const panel=document.getElementById('panel'+s);const a=panel.querySelector('.ann[data-id="'+id+'"] .ann-txt');if(a)a.textContent=v;}}
+
+// ─── CAPTURE & SAVE ───
+async function captureAndSave(){
+  const btn=document.getElementById('capBtn');
+  btn.textContent='⏳ 저장중...';btn.classList.add('saving');
+  document.body.classList.add('capture');
+  document.getElementById('toolbar').style.display='none';
+  await new Promise(r=>setTimeout(r,300));
+  try{
+    const sheet=document.getElementById('sheet');
+    const canvas=await html2canvas(sheet,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false});
+    canvas.toBlob(function(blob){
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement('a');
+      const d=new Date();
+      const fn='PT일지_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+'.png';
+      link.href=url;link.download=fn;document.body.appendChild(link);link.click();document.body.removeChild(link);
+      if(navigator.share&&navigator.canShare){const file=new File([blob],fn,{type:'image/png'});if(navigator.canShare({files:[file]})){navigator.share({files:[file],title:'PT 일지'}).catch(()=>{});}}
+      setTimeout(()=>URL.revokeObjectURL(url),5000);
+      toast('✅ 이미지 저장 완료!');
+    },'image/png',1.0);
+  }catch(err){toast('❌ 캡처 실패');}
+  document.body.classList.remove('capture');
+  document.getElementById('toolbar').style.display='flex';
+  btn.textContent='📸 캡처';btn.classList.remove('saving');
+}
+
+// ─── Init ───
+const sgEl=document.getElementById('sg');for(let i=1;i<=40;i++){const d=document.createElement('div');d.className='session-num';d.textContent=i;d.style.cursor='pointer';d.onclick=()=>d.classList.toggle('marked');sgEl.appendChild(d);}
+const hrc=document.getElementById('hr');for(let i=0;i<8;i++){const d=document.createElement('div');d.className='h-dot';d.onclick=()=>{hrc.querySelectorAll('.h-dot').forEach((x,j)=>x.classList.toggle('filled',j<=i));};hrc.appendChild(d);}
+function addExRow(){const b=document.getElementById('exB');const r=document.createElement('tr');r.innerHTML='<td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td>';b.appendChild(r);}
+
+// Set today's date
+const today=new Date();
+document.getElementById('dateCell').textContent=(today.getMonth()+1)+'/'+today.getDate();
+
+// Load members on start
+loadMembers();
+</script>
+</body>
+</html>
