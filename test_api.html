@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>API 테스트</title></head>
+<body style="font-family:sans-serif;padding:20px;">
+<h2>🔧 API 연결 테스트</h2>
+<div id="log" style="background:#f0f0f0;padding:15px;border-radius:10px;font-size:13px;line-height:2;white-space:pre-wrap;"></div>
+<script>
+const API='https://script.google.com/macros/s/AKfycbwI19_vVkGRszG-5CVTj03UOFaITBQfC_bdgeqIBsmoWCUN7kP86tgGShu_RzOBD3v2/exec';
+const log=document.getElementById('log');
+function addLog(msg){log.textContent+=msg+'\n';}
+async function runTests(){
+  addLog('=== 테스트 1: 기본 연결 ===');
+  try{const r=await fetch(API+'?action=test');addLog('상태: '+r.status);const t=await r.text();addLog('응답: '+t);}catch(e){addLog('❌ 에러: '+e.message);}
+  addLog('\n=== 테스트 2: 회원 목록 GET ===');
+  try{const r=await fetch(API+'?action=get_members');addLog('상태: '+r.status);const t=await r.text();addLog('응답: '+t);}catch(e){addLog('❌ 에러: '+e.message);}
+  addLog('\n=== 테스트 3: 회원 추가 POST ===');
+  try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'add_member',member:'테스트'})});addLog('상태: '+r.status);const t=await r.text();addLog('응답: '+t);}catch(e){addLog('❌ 에러: '+e.message);}
+  addLog('\n✅ 테스트 완료!');
+}
+runTests();
+</script>
+</body>
+</html>
