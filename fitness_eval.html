@@ -36,8 +36,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:#f0f2f5;padding:10px 10px 
 .score-big .sub{font-size:24px;color:#94a3b8;}
 .level-msg{font-size:16px;font-weight:800;margin-top:4px;}
 
-/* Radar */
-.radar-wrap{height:280px;margin:10px auto;max-width:400px;}
+/* ✅ 수정 1: 레이더 차트 중앙 정렬 */
+.radar-wrap{height:280px;margin:10px auto;max-width:400px;display:flex;align-items:center;justify-content:center;}
 
 /* Grade table */
 .grade-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;}
@@ -359,9 +359,7 @@ function calc1RM(type){
     const r=parseFloat(document.getElementById('mLPr').value)||0;
     const angle=parseFloat(document.getElementById('mLPa').value)||45;
     if(w>0&&r>0){
-      // Brzycki: 1RM = weight / (1.0278 - 0.0278 × reps)
       const raw1rm=r===1?w:w/(1.0278-0.0278*r);
-      // 파워 레그프레스 실효 하중 = 플레이트 무게 × sin(각도)
       const sinVal=Math.sin(angle*Math.PI/180);
       const effective=raw1rm*sinVal;
       document.getElementById('lp1rm').textContent=Math.round(raw1rm);
@@ -385,6 +383,7 @@ function calc1RM(type){
     }
   }
 }
+
 // ═══ ACSM ═══
 ['ckA','ckD','ckS'].forEach(id=>document.getElementById(id).addEventListener('change',updateACSM));
 function updateACSM(){const a=document.getElementById('ckA').checked,d=document.getElementById('ckD').checked,s=document.getElementById('ckS').checked;let m='',c='';
@@ -407,9 +406,7 @@ const LEVELS=[
   {title:'LEVEL 5',color:'#facc15',msg:'최상위 체력 수준입니다',detail:'상위권 체력. 부상 방지와 기능성 트레이닝에 집중할 단계입니다.'}
 ];
 
-// ═══ ACSM 남/여 연령별 평가 기준표 ═══
-// 푸시업: 남(표준), 여(무릎)  ACSM GETP 11th ed.
-// 등급: 1=우수, 2=양호, 3=보통, 4=미흡, 5=부족
+// ═══ 평가 기준 함수 ═══
 function getPushupGrade(val,gender,age){
   if(gender==='남'){
     if(age<30)return val>=36?1:val>=29?2:val>=22?3:val>=17?4:5;
@@ -425,39 +422,36 @@ function getPushupGrade(val,gender,age){
     return val>=17?1:val>=12?2:val>=5?3:val>=2?4:5;
   }
 }
-// 체지방률 기준 (ACSM)
 function getBfGrade(val,gender){
   if(gender==='남')return val<=10?1:val<=15?2:val<=20?3:val<=25?4:5;
   else return val<=18?1:val<=23?2:val<=28?3:val<=33?4:5;
 }
-// 하체 근력 (레그프레스 체중비)
 function getLowerGrade(val,gender){
   if(gender==='남')return val>=2.8?1:val>=2.2?2:val>=1.8?3:val>=1.4?4:5;
   else return val>=2.0?1:val>=1.6?2:val>=1.2?3:val>=0.9?4:5;
 }
-// 상체 근력 (벤치프레스 체중비)
 function getUpperGrade(val,gender){
   if(gender==='남')return val>=1.2?1:val>=1.0?2:val>=0.8?3:val>=0.6?4:5;
   else return val>=0.8?1:val>=0.6?2:val>=0.5?3:val>=0.35?4:5;
 }
-// 스텝테스트 회복심박
 function getStepGrade(hr){
   if(hr<=0)return 3;
   return hr<=90?1:hr<=100?2:hr<=110?3:hr<=120?4:5;
 }
-// 안정시 심박수 (정상: 60-100bpm, AHA 기준)
+
+// ✅ 수정 2: getHRtext - AHA(정상 60-100bpm) 기준, 정상 61~89 / 정상 상한 90~100
 function getHRtext(hr){
   if(hr<=0)return '';
-  if(hr<50)return '매우 낮음 (서맥 가능성, 운동선수가 아니면 확인 필요)';
-  if(hr<=60)return '우수 (운동선수 수준의 심폐 기능)';
-  if(hr<=70)return '양호';
-  if(hr<=80)return '정상';
-  if(hr<=90)return '정상 상한';
-  if(hr<=100)return '경계 (스트레스, 카페인, 컨디션 확인)';
-  return '빈맥 (100bpm 초과, 의료진 상담 권장)';
+  if(hr<40)return '심각한 서맥 — 즉시 의료진 상담 필요';
+  if(hr<50)return '서맥 (운동선수라면 정상 가능, 비운동인은 확인 권장)';
+  if(hr<=60)return '정상 하한 — 심폐 기능 우수 (운동선수 수준)';
+  if(hr<=89)return '정상 (AHA 기준 내, 양호)';
+  if(hr<=100)return '정상 상한 (AHA 기준 내) — 스트레스·카페인·컨디션 확인 권장';
+  if(hr<=110)return '빈맥 경계 — 스트레스·카페인·탈수 확인 권장';
+  return '빈맥 (>110bpm) — 의료진 상담 권장';
 }
 
-function gradeLabel(g){return ['','우수','양호','보통','미흡','부족'][g]||'-';}
+function gradeLabel(g){return['','우수','양호','보통','미흡','부족'][g]||'-';}
 function gradeColor(g){return g<=1?'#10b981':g<=2?'#3b82f6':g<=3?'#f97316':g<=4?'#ef4444':'#c62828';}
 
 let radarChart=null;
@@ -467,14 +461,11 @@ function updateReport(result){
   const badge=document.getElementById('lvBadge');badge.textContent=lv.title;badge.style.background=lv.color;
   const msg=document.getElementById('lvMsg');msg.textContent=lv.msg;msg.style.color=lv.color;
   if(result.memberName)document.getElementById('reportMemberName').textContent=result.memberName;
-  // Grade table
   const cats=['하체 근력','상체 근력','근지구력(푸시업)','심폐 회복력','체지방률'];
   let html='';
   result.labels.forEach((l,i)=>{const c=gradeColor(result.grades[i]);html+=`<tr><td style="font-weight:700">${cats[i]}</td><td>${l}</td><td><span class="grade-pill" style="background:${c}">${gradeLabel(result.grades[i])}</span></td></tr>`;});
   document.getElementById('gradeBody').innerHTML=html;
-  // Analysis
   document.getElementById('analysisBox').innerHTML=result.analysis||('<strong>[총평]</strong> '+lv.detail);
-  // Radar
   const ctx=document.getElementById('radarChart');
   if(radarChart)radarChart.destroy();
   radarChart=new Chart(ctx,{type:'radar',data:{labels:['하체','상체','지구력','심폐회복','체지방'],
@@ -497,13 +488,12 @@ async function analyzeAndSave(){
   const age=parseInt(document.getElementById('mAge').value)||30;
   const gender=document.getElementById('mGender').value;
   const grades=[getLowerGrade(lRatio,gender),getUpperGrade(uRatio,gender),getPushupGrade(pu,gender,age),getStepGrade(stepHR),getBfGrade(bf,gender)];
-  const points=grades.map(g=>20-(g-1)*4); // 1등급=20, 2=16, 3=12, 4=8, 5=4
+  const points=grades.map(g=>20-(g-1)*4);
   const total=Math.max(0,Math.min(100,points.reduce((a,b)=>a+b,0)));
   const lvIdx=Math.min(Math.floor(total/20.01),4);
   const labels=[lRatio.toFixed(2)+'배',uRatio.toFixed(2)+'배',pu+'회'+(gender==='여'?' (무릎)':''),stepHR?stepHR+'bpm':'-',bf+'%'];
   const acsm=document.getElementById('acsmR').textContent;
 
-  // Professional analysis
   const bmi=parseFloat(document.getElementById('mBMI').value)||0;
   const smm=parseFloat(document.getElementById('mSMM').value)||0;
   const waist=parseFloat(document.getElementById('mWaist').value)||0;
@@ -514,7 +504,8 @@ async function analyzeAndSave(){
   const bpd=parseFloat(document.getElementById('mBPd').value)||0;
 
   let analysis='';
-  // Body composition
+
+  // 체성분
   analysis+='<div style="margin-bottom:12px;"><b>🔬 체성분 분석</b><br>';
   if(bmi>0){
     if(bmi<18.5)analysis+='BMI '+bmi+'로 <span style="color:#3b82f6">저체중</span>입니다. 근육량 증가를 위한 점진적 저항 운동과 단백질 섭취(체중 1kg당 1.6~2.2g)를 권장합니다.<br>';
@@ -536,7 +527,7 @@ async function analyzeAndSave(){
   }
   analysis+='</div>';
 
-  // Strength
+  // 근력
   analysis+='<div style="margin-bottom:12px;"><b>💪 근력 평가</b><br>';
   if(lRatio>0){
     if(lRatio>=3.6)analysis+='하체 근력 비율 '+lRatio.toFixed(2)+'배 — <span style="color:#10b981">매우 우수</span>. ACSM 기준 상위 수준입니다.<br>';
@@ -550,7 +541,7 @@ async function analyzeAndSave(){
   }
   analysis+='</div>';
 
-  // Endurance
+  // 근지구력
   analysis+='<div style="margin-bottom:12px;"><b>🏃 근지구력 평가</b><br>';
   if(pu>0){
     if(pu>=30)analysis+='푸시업 '+pu+'회 — <span style="color:#10b981">우수</span>. 상체 근지구력이 뛰어납니다.<br>';
@@ -561,16 +552,27 @@ async function analyzeAndSave(){
   if(sq>0)analysis+='스쿼트 '+sq+'회/분'+(sq>=30?' — 우수':sq>=20?' — 보통':' — 하체 지구력 향상 필요')+'<br>';
   analysis+='</div>';
 
-  // Cardio
+  // ✅ 수정 3 & 4: 심폐 기능 평가 (AHA/ACC/ESC 최신 기준)
   analysis+='<div style="margin-bottom:12px;"><b>❤️ 심폐 기능 평가</b><br>';
   if(hr>0){
     const hrText=getHRtext(hr);
-    analysis+='안정시 심박수 '+hr+'bpm — <span style="color:'+(hr<=70?'#10b981':hr<=90?'#3b82f6':hr<=100?'#f97316':'#ef4444')+'">'+hrText+'</span>.<br>';
+    // 색상: <40=진빨강 / <50=빨강 / <=89=초록(정상 양호) / <=100=주황(정상 상한) / >100=빨강
+    const hrColor=hr<40?'#c62828':hr<50?'#ef4444':hr<=89?'#10b981':hr<=100?'#f97316':'#ef4444';
+    analysis+='안정시 심박수 '+hr+'bpm — <span style="color:'+hrColor+'">'+hrText+'</span> <span style="font-size:10px;color:#94a3b8;">[AHA 정상: 60-100bpm]</span><br>';
   }
+  // ✅ 혈압 분류 기준 (2017 ACC/AHA 공식 기준 + 5단계 세분화)
+  // 이상적: <110/<70 | 정상: 110-119/<80 | 주의: 120-129/<80 | 1단계: 130-139/80-89 | 2단계: ≥140/≥90
   if(bps>0&&bpd>0){
-    if(bps<120&&bpd<80)analysis+='혈압 '+bps+'/'+bpd+'mmHg — <span style="color:#10b981">정상</span>.<br>';
-    else if(bps<140&&bpd<90)analysis+='혈압 '+bps+'/'+bpd+'mmHg — <span style="color:#f97316">주의 단계(고혈압 전단계)</span>. 나트륨 섭취를 줄이고 유산소 운동을 규칙적으로 하세요.<br>';
-    else analysis+='혈압 '+bps+'/'+bpd+'mmHg — <span style="color:#ef4444">높음</span>. 의료진 상담 후 운동 프로그램을 설계하세요. 고강도 운동은 피하세요.<br>';
+    if(bps<110&&bpd<70)
+      analysis+='혈압 '+bps+'/'+bpd+'mmHg — <span style="color:#059669">🌟 이상적 (&lt;110/&lt;70)</span>. 심혈관 건강이 최적 상태입니다. 현재 생활습관을 유지하세요.<br>';
+    else if(bps<120&&bpd<80)
+      analysis+='혈압 '+bps+'/'+bpd+'mmHg — <span style="color:#10b981">정상 (110-119/&lt;80, ACC/AHA Normal)</span>. 정상 범위입니다. 꾸준한 유산소 운동과 균형 잡힌 식단을 유지하세요.<br>';
+    else if(bps<=129&&bpd<80)
+      analysis+='혈압 '+bps+'/'+bpd+'mmHg — <span style="color:#f59e0b">주의 (120-129/&lt;80, ACC/AHA Elevated)</span>. 정상보다 높은 상태입니다. 나트륨 섭취 줄이기, 주 3회 이상 유산소 운동, 체중 관리를 권장합니다.<br>';
+    else if((bps>=130&&bps<=139)||(bpd>=80&&bpd<=89))
+      analysis+='혈압 '+bps+'/'+bpd+'mmHg — <span style="color:#f97316">고혈압 1단계 (130-139/80-89, ACC/AHA Stage 1)</span>. 생활습관 교정이 필수이며, 심혈관 위험도에 따라 약물 치료를 고려해야 합니다. 의료진 상담을 권장합니다.<br>';
+    else
+      analysis+='혈압 '+bps+'/'+bpd+'mmHg — <span style="color:#ef4444">고혈압 2단계 (≥140/≥90, ACC/AHA Stage 2)</span>. 즉시 의료진 상담이 필요합니다. 고강도 운동은 의료 승인 후 실시하고, 약물 치료와 생활습관 교정을 병행하세요.<br>';
   }
   if(stepHR>0){
     if(stepHR<=100)analysis+='스텝테스트 회복심박 '+stepHR+'bpm — <span style="color:#10b981">우수</span>. 심폐 회복력이 뛰어납니다.<br>';
@@ -579,7 +581,7 @@ async function analyzeAndSave(){
   }
   analysis+='</div>';
 
-  // Recommendation
+  // 종합 운동 처방
   analysis+='<div><b>📋 종합 운동 처방</b><br>';
   const lv=LEVELS[lvIdx];
   analysis+=lv.detail+'<br>';
@@ -591,7 +593,6 @@ async function analyzeAndSave(){
 
   const result={total,lvIdx,grades,labels,acsm,analysis,memberName:member+' — 최신 측정',extra:{weight:document.getElementById('mW').value,bf:document.getElementById('mBF').value,smm:document.getElementById('mSMM').value,bmi:document.getElementById('mBMI').value}};
   updateReport(result);
-  // Save
   toast('⏳ 저장중...');
   const data={action:'save_eval',member,date:new Date().toLocaleDateString('ko-KR'),
     age:document.getElementById('mAge').value,gender:document.getElementById('mGender').value,
@@ -660,7 +661,7 @@ h+=`<b>ACSM:</b> ${ev.acsm||'-'}`;
 if(ev.analysisHtml){h+=`<hr style="margin:10px 0;"><div style="font-size:12px;line-height:1.6;">${ev.analysisHtml}</div>`;}
 document.getElementById('detailContent').innerHTML=h;document.getElementById('detailModal').classList.add('show');}
 
-// ═══ REPORT SESSIONS (회원별 리포트 불러오기) ═══
+// ═══ REPORT SESSIONS ═══
 async function loadReportSessions(name){
   const box=document.getElementById('reportSessions');box.innerHTML='<div style="color:#aaa;font-size:12px;">불러오는 중...</div>';
   try{
