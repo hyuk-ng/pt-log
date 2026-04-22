@@ -287,11 +287,11 @@ select.fi{cursor:pointer;}
 
     <!-- AI 1개월 운동 프로그램 카드 -->
     <div class="card" id="programCard" style="display:none;margin-top:10px;">
-      <div class="card-title">🤖 AI 맞춤 1개월 운동 프로그램</div>
+      <div class="card-title">📋 맞춤 1개월 운동 프로그램</div>
       <div id="programContent" style="font-size:13px;line-height:1.8;color:#475569;">
         <div style="text-align:center;padding:20px;color:#94a3b8;">
           <div style="font-size:32px;margin-bottom:8px;">⏳</div>
-          <div>AI가 운동 프로그램을 생성 중입니다...</div>
+          <div>운동 프로그램을 생성 중입니다...</div>
         </div>
       </div>
     </div>
@@ -315,14 +315,14 @@ select.fi{cursor:pointer;}
 
       <!-- AI 생성 버튼 -->
       <button class="btn btn-primary" id="planGenBtn" onclick="generatePlan()" style="margin-bottom:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);font-size:15px;padding:14px;">
-        🤖 AI 운동 프로그램 생성
+        📋 맞춤 운동 프로그램 생성
       </button>
 
       <!-- 로딩 -->
       <div id="planLoading" style="display:none;text-align:center;padding:30px;">
         <div style="font-size:28px;margin-bottom:8px;">⏳</div>
-        <div style="font-size:14px;font-weight:700;color:#6366f1;">AI가 맞춤 운동 프로그램을 생성 중입니다...</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:4px;">측정 데이터를 분석하고 있어요 (10~20초)</div>
+        <div style="font-size:14px;font-weight:700;color:#6366f1;">맞춤 운동 프로그램을 생성 중입니다...</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px;">측정 데이터를 분석하고 있어요</div>
       </div>
 
       <!-- 결과 -->
@@ -854,231 +854,272 @@ function generatePlan() {
   }, 600);
 }
 
-// ═══ 규칙 기반 운동 프로그램 생성 엔진 ═══
+// ═══ 규칙 기반 운동 프로그램 생성 엔진 (ACSM 2026 기준) ═══
 function buildPlanFromData(ev) {
   const age    = parseInt(ev.age) || 30;
   const gender = ev.gender || '남';
   const weight = parseFloat(ev.weight) || 70;
   const lp1rm  = parseFloat(ev.legpress) || 0;
   const bp1rm  = parseFloat(ev.bench) || 0;
-  const bf     = parseFloat(ev.bf) || 20;
   const hr     = parseInt(ev.hr) || 70;
   const stepHR = parseInt(ev.step) || 110;
   const pu     = parseInt(ev.pushup) || 0;
   const total  = parseInt(ev.totalScore) || 40;
-  const lvIdx  = Math.min(Math.floor(total / 20.01), 4); // 0~4
+  const lvIdx  = Math.min(Math.floor(total / 20.01), 4);
 
-  // ── 최대심박수 & 목표심박수 (Karvonen 공식) ──
+  // ── Karvonen 공식 목표심박수 (안정시 심박수 반영) ──
   const hrMax  = 220 - age;
   const hrRest = hr || 70;
-
-  function targetHR(pctLow, pctHigh) {
-    const lo = Math.round(hrRest + (hrMax - hrRest) * pctLow);
-    const hi = Math.round(hrRest + (hrMax - hrRest) * pctHigh);
-    return lo + '~' + hi + 'bpm';
+  function tHR(lo, hi) {
+    return Math.round(hrRest + (hrMax - hrRest) * lo) + '~' + Math.round(hrRest + (hrMax - hrRest) * hi) + 'bpm';
   }
 
-  // ── 레벨별 기본 설정 ──
-  const levelConfig = [
-    // LEVEL 1
-    { weightDays:2, cardioDays:3, cardioMin:20, strPct:[55,60,65,70], split:'전신 운동', cardioType:'걷기 또는 실내자전거', zone:'존 1-2 (최대심박수 50-60%)', zoneHR: targetHR(0.50,0.60) },
-    // LEVEL 2
-    { weightDays:3, cardioDays:3, cardioMin:25, strPct:[60,65,70,75], split:'전신 운동', cardioType:'속보 또는 트레드밀', zone:'존 2 (최대심박수 55-65%)', zoneHR: targetHR(0.55,0.65) },
-    // LEVEL 3
-    { weightDays:3, cardioDays:3, cardioMin:30, strPct:[65,70,75,80], split:'상체/하체 분할', cardioType:'트레드밀 또는 사이클', zone:'존 2-3 (최대심박수 60-70%)', zoneHR: targetHR(0.60,0.70) },
-    // LEVEL 4
-    { weightDays:4, cardioDays:3, cardioMin:35, strPct:[70,75,80,85], split:'상체/하체 분할', cardioType:'트레드밀·사이클·로잉', zone:'존 3 (최대심박수 65-75%)', zoneHR: targetHR(0.65,0.75) },
-    // LEVEL 5
-    { weightDays:4, cardioDays:3, cardioMin:40, strPct:[75,80,85,90], split:'상체/하체/전신 분할', cardioType:'HIIT 또는 러닝', zone:'존 3-4 (최대심박수 70-80%)', zoneHR: targetHR(0.70,0.80) },
-  ];
-  const cfg = levelConfig[lvIdx];
+  // ── 약점 파악 ──
+  const lRatio    = weight > 0 ? lp1rm / weight : 0;
+  const uRatio    = weight > 0 ? bp1rm / weight : 0;
+  const weakLower = gender==='남' ? lRatio < 1.8 : lRatio < 1.2;
+  const weakUpper = gender==='남' ? uRatio < 0.8 : uRatio < 0.5;
+  const weakCardio= stepHR > 115;
+  const weakEndur = gender==='남' ? pu < 17 : pu < 13;
 
-  // ── 주간 스케줄 생성 ──
+  // ── 1RM → kg (2.5kg 단위 반올림) ──
+  function kg(rm, pct) {
+    return rm > 0 ? Math.round(rm * pct / 100 / 2.5) * 2.5 + 'kg' : '가벼운 중량';
+  }
+
+  // ── 레벨별 설정 (ACSM 2026: 초급 2-3일/주, 중급 3일/주, 고급 4-6일/주) ──
+  const cfg = [
+    // LEVEL 1 — 초급: 전신 주2회, 유산소 주3회, 1RM 60-70%
+    { wDays:2, cDays:3, cMin:20, pct:[60,65,65,70], split:'전신 운동 (주 2회)', cardioType:'실내 자전거 또는 걷기', zone:'존 1-2 (최대심박수 50-60%)', zHR:tHR(0.50,0.60), note:'대화가 편하게 가능한 강도' },
+    // LEVEL 2 — 초중급: 전신 주3회, 유산소 주3회, 1RM 65-75%
+    { wDays:3, cDays:3, cMin:25, pct:[65,68,72,75], split:'전신 운동 (주 3회)', cardioType:'트레드밀 속보 또는 자전거', zone:'존 2 (최대심박수 55-65%)', zHR:tHR(0.55,0.65), note:'대화가 가능하지만 약간 숨찬 강도' },
+    // LEVEL 3 — 중급: 상하체 분할 주3회, 유산소 주3회, 1RM 70-80%
+    { wDays:3, cDays:3, cMin:30, pct:[70,73,77,80], split:'상체/하체 분할 (주 3회)', cardioType:'트레드밀 또는 사이클', zone:'존 2-3 (최대심박수 60-70%)', zHR:tHR(0.60,0.70), note:'대화가 어려운 강도, 집중 유지' },
+    // LEVEL 4 — 중고급: 상하체 주4회, 유산소 주3회, 1RM 75-85%
+    { wDays:4, cDays:3, cMin:35, pct:[75,78,82,85], split:'상체/하체 분할 (주 4회)', cardioType:'트레드밀·사이클·로잉머신', zone:'존 3 (최대심박수 65-75%)', zHR:tHR(0.65,0.75), note:'고강도 유지, 심박수 모니터링' },
+    // LEVEL 5 — 고급: 분할 주4회, 유산소 주3회, 1RM 80-90%
+    { wDays:4, cDays:3, cMin:40, pct:[80,83,87,90], split:'부위별 분할 (주 4회)', cardioType:'러닝 또는 인터벌 사이클', zone:'존 3-4 (최대심박수 70-80%)', zHR:tHR(0.70,0.80), note:'고강도 인터벌, 충분한 회복 필수' },
+  ][lvIdx];
+
+  // ── 주간 스케줄 ──
   const schedules = [
-    // wt2 cardio3
     { '월':'웨이트','화':'유산소','수':'휴식','목':'웨이트','금':'유산소','토':'유산소','일':'휴식' },
-    // wt3 cardio3
     { '월':'웨이트','화':'유산소','수':'웨이트','목':'유산소','금':'웨이트','토':'유산소','일':'휴식' },
-    // wt3 cardio3 (same as lv2)
     { '월':'웨이트','화':'유산소','수':'웨이트','목':'유산소','금':'웨이트','토':'유산소','일':'휴식' },
-    // wt4 cardio3
     { '월':'웨이트','화':'유산소','수':'웨이트','목':'웨이트','금':'유산소','토':'웨이트','일':'유산소' },
-    // wt4 cardio3
     { '월':'웨이트','화':'유산소','수':'웨이트','목':'웨이트','금':'유산소','토':'웨이트','일':'유산소' },
   ];
-  const schedule = schedules[lvIdx];
 
-  // ── 약점 파악 (집중 보강 결정) ──
-  const lRatio = weight > 0 ? lp1rm / weight : 0;
-  const uRatio = weight > 0 ? bp1rm / weight : 0;
-  const weakLower  = (gender==='남' ? lRatio < 1.8 : lRatio < 1.2);
-  const weakUpper  = (gender==='남' ? uRatio < 0.8 : uRatio < 0.5);
-  const weakCardio = stepHR > 115;
-  const weakEndur  = (gender==='남' ? pu < 17 : pu < 13);
+  // ── 주차별 운동 프로그램 생성 함수 ──
+  // 원칙: 초급 = 머신(무게복합) + 프리웨이트(체중/횟수)
+  //       중급 = 머신 + 기본 프리웨이트 혼합
+  //       고급 = 기본 프리웨이트 위주 + 머신 보조
+  // 하체: 파워 레그프레스 + 핵 스쿼트 머신 사용
+  function makeSessions(pct) {
+    const p = pct;
 
-  // ── 1RM 기반 중량 계산 ──
-  function kg(rm, pct) { return rm > 0 ? Math.round(rm * pct / 100 / 2.5) * 2.5 + 'kg' : '체중의 ' + pct + '%'; }
+    if (lvIdx === 0) {
+      // ── LEVEL 1: 초급 전신 A/B (주 2회) ──
+      // 무게 복합 → 머신 / 체중·횟수 위주 → 프리웨이트(덤벨)
+      return [
+        {
+          day: '전신 A (월) — 머신 위주',
+          exercises: [
+            { name:'파워 레그프레스 (머신)',   sets:'2세트', reps:'15회', intensity: kg(lp1rm,p),   rest:'90초',  tip:'발 어깨너비, 무릎이 발끝 방향으로 유지' },
+            { name:'체스트프레스 (머신)',      sets:'2세트', reps:'15회', intensity: kg(bp1rm,p),   rest:'90초',  tip:'등받이에 등 밀착, 밀 때 숨 내쉬기' },
+            { name:'랫풀다운 (머신)',          sets:'2세트', reps:'15회', intensity:'가벼운 중량',  rest:'60초',  tip:'바를 쇄골 아래까지 당기기' },
+            { name:'레그컬 (머신)',            sets:'2세트', reps:'15회', intensity:'가벼운 중량',  rest:'60초',  tip:'허벅지 뒤쪽 집중, 천천히 내리기' },
+            { name:'시티드 로우 (머신)',       sets:'2세트', reps:'15회', intensity:'가벼운 중량',  rest:'60초',  tip:'허리 세우고 날개뼈 모으기' },
+          ]
+        },
+        {
+          day: '전신 B (목) — 프리웨이트(체중/덤벨)',
+          exercises: [
+            { name:'덤벨 스쿼트',             sets:'2세트', reps:'15회', intensity:'가벼운 덤벨',  rest:'60초',  tip:'발 어깨너비, 무릎이 발끝 넘지 않게' },
+            { name:'덤벨 숄더프레스',          sets:'2세트', reps:'15회', intensity:'가벼운 덤벨',  rest:'60초',  tip:'팔꿈치 90°에서 위로 쭉 펴기' },
+            { name:'덤벨 벤트오버 로우',       sets:'2세트', reps:'15회', intensity:'가벼운 덤벨',  rest:'60초',  tip:'허리 곧게 유지, 팔꿈치 위로 당기기' },
+            { name:'힙 브리지',               sets:'2세트', reps:'20회', intensity:'체중',         rest:'45초',  tip:'엉덩이 최대한 높이 들어올리기' },
+            { name:'플랭크',                  sets:'2세트', reps:'20초', intensity:'체중',         rest:'45초',  tip:'엉덩이가 올라가거나 처지지 않게' },
+            { name:'크런치',                  sets:'2세트', reps:'15회', intensity:'체중',         rest:'45초',  tip:'목 당기지 말고 복부 힘으로만' },
+          ]
+        }
+      ];
 
-  // ── 근력 세션 구성 ──
-  let sessions = [];
+    } else if (lvIdx === 1) {
+      // ── LEVEL 2: 초중급 전신 A/B/C (주 3회) ──
+      // A/C = 머신 위주(복합 무게) / B = 프리웨이트(덤벨) 혼합
+      return [
+        {
+          day: '전신 A (월) — 머신',
+          exercises: [
+            { name:'파워 레그프레스 (머신)',   sets:'3세트', reps:'12회', intensity: kg(lp1rm,p),   rest:'90초',  tip:'발 위치 중간, 속도 일정하게' },
+            { name:'핵 스쿼트 (머신)',         sets:'3세트', reps:'12회', intensity:'가벼운 중량',  rest:'90초',  tip:'등 기대어 무릎 방향 유지' },
+            { name:'체스트프레스 (머신)',      sets:'3세트', reps:'12회', intensity: kg(bp1rm,p),   rest:'90초',  tip:'호흡: 밀 때 내쉬기' },
+            { name:'랫풀다운 (머신)',          sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'광배근 먼저 활성화' },
+            { name:'레그컬 (머신)',            sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'천천히 내리기' },
+          ]
+        },
+        {
+          day: '전신 B (수) — 덤벨 프리웨이트',
+          exercises: [
+            { name:'덤벨 스쿼트',             sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'60초',  tip:'가슴 앞에 덤벨 들고 앉기' },
+            { name:'덤벨 벤치프레스',         sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'60초',  tip:'팔꿈치 45°, 가슴에서 밀기' },
+            { name:'덤벨 숄더프레스',         sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'60초',  tip:'팔꿈치 90°에서 위로 밀기' },
+            { name:'덤벨 벤트오버 로우',      sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'60초',  tip:'등 곧게, 배꼽 쪽으로 당기기' },
+            { name:'힙 브리지',              sets:'3세트', reps:'20회', intensity:'체중',          rest:'45초',  tip:'엉덩이 최대한 높이 들기' },
+            { name:'플랭크',                 sets:'3세트', reps:'30초', intensity:'체중',          rest:'45초',  tip:'코어에 힘 유지' },
+          ]
+        },
+        {
+          day: '전신 C (금) — 머신 + 덤벨 혼합',
+          exercises: [
+            { name:'파워 레그프레스 (머신)',   sets:'3세트', reps:'10회', intensity: kg(lp1rm,p+5), rest:'90초',  tip:'이번 주 최고 중량 도전' },
+            { name:'체스트프레스 (머신)',      sets:'3세트', reps:'10회', intensity: kg(bp1rm,p+5), rest:'90초',  tip:'컨트롤하며 천천히' },
+            { name:'시티드 로우 (머신)',       sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'등 하부 광배근 집중' },
+            { name:'레그 익스텐션 (머신)',     sets:'3세트', reps:'15회', intensity:'중강도',       rest:'60초',  tip:'무릎 완전히 펴기' },
+            { name:'덤벨 사이드 레터럴 레이즈', sets:'3세트', reps:'15회', intensity:'가벼운 덤벨', rest:'45초', tip:'팔꿈치 살짝 구부리고 올리기' },
+            { name:'크런치',                  sets:'3세트', reps:'20회', intensity:'체중',         rest:'30초',  tip:'호흡 내쉬며 복부 수축' },
+          ]
+        }
+      ];
 
-  if (lvIdx <= 1) {
-    // 전신 운동 (LEVEL 1-2): 주 2~3회 전신
-    sessions = [
-      {
-        day: '전신 A (월)',
-        exercises: [
-          { name:'레그프레스',     sets:'3세트', reps:'15회', intensity: lp1rm>0 ? kg(lp1rm, cfg.strPct[0]) : '가벼운 중량', rest:'90초' },
-          { name:'체스트프레스 (머신)', sets:'3세트', reps:'15회', intensity: bp1rm>0 ? kg(bp1rm, cfg.strPct[0]) : '가벼운 중량', rest:'90초' },
-          { name:'시티드 로우',    sets:'3세트', reps:'15회', intensity:'중강도',   rest:'60초' },
-          { name:'레그컬',         sets:'3세트', reps:'15회', intensity:'중강도',   rest:'60초' },
-          { name:'플랭크',         sets:'3세트', reps:'30초', intensity:'코어 안정', rest:'45초' },
-        ]
-      },
-      {
-        day: '전신 B (목)',
-        exercises: [
-          { name:'스쿼트 (고블릿)', sets:'3세트', reps:'12회', intensity:'중강도',   rest:'90초' },
-          { name:'덤벨 숄더프레스', sets:'3세트', reps:'12회', intensity:'중강도',   rest:'60초' },
-          { name:'랫풀다운',        sets:'3세트', reps:'12회', intensity:'중강도',   rest:'60초' },
-          { name:'힙 브리지',       sets:'3세트', reps:'15회', intensity:'체중',     rest:'45초' },
-          { name:'크런치',          sets:'3세트', reps:'20회', intensity:'체중',     rest:'45초' },
-        ]
-      },
-    ];
-    if (lvIdx === 1) sessions.push({
-      day: '전신 C (금)',
-      exercises: [
-        { name:'레그프레스',      sets:'3세트', reps:'12회', intensity: lp1rm>0 ? kg(lp1rm, cfg.strPct[1]) : '중강도', rest:'90초' },
-        { name:'인클라인 덤벨프레스', sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초' },
-        { name:'케이블 로우',     sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초' },
-        { name:'레그 익스텐션',   sets:'3세트', reps:'15회', intensity:'중강도', rest:'60초' },
-        { name:'사이드 플랭크',   sets:'2세트', reps:'20초', intensity:'체중',   rest:'30초' },
-      ]
-    });
-  } else if (lvIdx === 2) {
-    // 상체/하체 분할 (LEVEL 3)
-    sessions = [
-      {
-        day: '하체 (월)',
-        exercises: [
-          { name:'레그프레스',    sets:'4세트', reps:'10회', intensity: kg(lp1rm, cfg.strPct[0]), rest:'90초' },
-          { name:'레그컬',        sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초' },
-          { name:'레그 익스텐션', sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초' },
-          { name:'카프레이즈',    sets:'3세트', reps:'20회', intensity:'체중',   rest:'45초' },
-          { name:'플랭크',        sets:'3세트', reps:'40초', intensity:'코어',   rest:'30초' },
-        ]
-      },
-      {
-        day: '상체 (수)',
-        exercises: [
-          { name:'벤치프레스',      sets:'4세트', reps:'10회', intensity: kg(bp1rm, cfg.strPct[0]), rest:'90초' },
-          { name:'랫풀다운',        sets:'3세트', reps:'10회', intensity:'중강도', rest:'60초' },
-          { name:'덤벨 숄더프레스', sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초' },
-          { name:'케이블 로우',     sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초' },
-          { name:'바벨 컬',         sets:'3세트', reps:'12회', intensity:'중강도', rest:'45초' },
-          ...(weakUpper ? [{ name:'푸시업 (약점보강)', sets:'3세트', reps:'최대', intensity:'체중', rest:'60초' }] : []),
-        ]
-      },
-      {
-        day: '전신 (금)',
-        exercises: [
-          { name:'스쿼트',        sets:'4세트', reps:'10회', intensity:'중강도', rest:'90초' },
-          { name:'덤벨 런지',     sets:'3세트', reps:'각 10회', intensity:'중강도', rest:'60초' },
-          { name:'케이블 체스트플라이', sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초' },
-          { name:'시티드 로우',   sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초' },
-          { name:'러시안 트위스트', sets:'3세트', reps:'20회', intensity:'체중', rest:'45초' },
-        ]
-      },
-    ];
-  } else {
-    // 상체/하체 고강도 분할 (LEVEL 4-5)
-    sessions = [
-      {
-        day: '하체 A (월)',
-        exercises: [
-          { name:'레그프레스',    sets:'4세트', reps:'8회',  intensity: kg(lp1rm, cfg.strPct[0]), rest:'120초' },
-          { name:'레그컬',        sets:'4세트', reps:'10회', intensity:'고강도', rest:'90초' },
-          { name:'레그 익스텐션', sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초' },
-          { name:'힙 어덕션',     sets:'3세트', reps:'15회', intensity:'중강도', rest:'45초' },
-          { name:'카프레이즈',    sets:'4세트', reps:'20회', intensity:'고강도', rest:'45초' },
-          ...(weakLower ? [{ name:'불가리안 스플릿 스쿼트 (약점보강)', sets:'3세트', reps:'각 10회', intensity:'체중/덤벨', rest:'60초' }] : []),
-        ]
-      },
-      {
-        day: '상체 A (수)',
-        exercises: [
-          { name:'벤치프레스',      sets:'4세트', reps:'8회',  intensity: kg(bp1rm, cfg.strPct[0]), rest:'120초' },
-          { name:'바벨 로우',       sets:'4세트', reps:'8회',  intensity:'고강도', rest:'90초' },
-          { name:'인클라인 덤벨프레스', sets:'3세트', reps:'10회', intensity:'중강도', rest:'60초' },
-          { name:'랫풀다운',        sets:'3세트', reps:'10회', intensity:'중강도', rest:'60초' },
-          { name:'오버헤드 프레스', sets:'3세트', reps:'10회', intensity:'중강도', rest:'60초' },
-          ...(weakUpper ? [{ name:'딥스 또는 푸시업 (약점보강)', sets:'3세트', reps:'최대', intensity:'체중', rest:'60초' }] : []),
-        ]
-      },
-      {
-        day: '하체 B (목)',
-        exercises: [
-          { name:'레그프레스 (와이드)',  sets:'4세트', reps:'10회', intensity: kg(lp1rm, cfg.strPct[1]), rest:'90초' },
-          { name:'루마니안 데드리프트', sets:'4세트', reps:'10회', intensity:'중강도', rest:'90초' },
-          { name:'레그컬',              sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초' },
-          { name:'플랭크',              sets:'3세트', reps:'60초', intensity:'코어',   rest:'30초' },
-        ]
-      },
-      {
-        day: '상체 B (토)',
-        exercises: [
-          { name:'덤벨 플라이',      sets:'4세트', reps:'12회', intensity:'중강도', rest:'60초' },
-          { name:'케이블 로우',      sets:'4세트', reps:'12회', intensity:'중강도', rest:'60초' },
-          { name:'아놀드 프레스',    sets:'3세트', reps:'10회', intensity:'중강도', rest:'60초' },
-          { name:'바벨 컬',          sets:'3세트', reps:'12회', intensity:'중강도', rest:'45초' },
-          { name:'트라이셉스 푸시다운', sets:'3세트', reps:'12회', intensity:'중강도', rest:'45초' },
-        ]
-      },
-    ];
+    } else if (lvIdx === 2) {
+      // ── LEVEL 3: 중급 상체/하체 분할 (주 3회) ──
+      // 하체 = 파워레그프레스 + 핵스쿼트 + 머신
+      // 상체 = 머신 + 기본 프리웨이트(덤벨벤치, 덤벨로우) 혼합
+      return [
+        {
+          day: '하체 (월) — 머신 위주',
+          exercises: [
+            { name:'파워 레그프레스 (머신)',   sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),   rest:'90초',  tip:'발 어깨너비, 엉덩이 들리지 않게' },
+            { name:'핵 스쿼트 (머신)',         sets:'3세트', reps:'10회', intensity:'중강도',       rest:'90초',  tip:'등 밀착, 무릎 발끝 방향 유지' },
+            { name:'레그컬 (머신)',            sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'허리 들뜨지 않게' },
+            { name:'레그 익스텐션 (머신)',     sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'마지막 동작 1초 버티기' },
+            { name:'카프레이즈 (스탠딩)',      sets:'3세트', reps:'20회', intensity:'체중',         rest:'30초',  tip:'최대한 높이, 천천히 내리기' },
+            ...(weakLower ? [{ name:'✅ 보강: 파워 레그프레스 추가', sets:'2세트', reps:'15회', intensity: kg(lp1rm,p-10), rest:'60초', tip:'가벼운 중량으로 근지구력 강화' }] : []),
+          ]
+        },
+        {
+          day: '상체 (수) — 머신 + 덤벨 혼합',
+          exercises: [
+            { name:'덤벨 벤치프레스',         sets:'4세트', reps:'10회', intensity: kg(bp1rm,p),   rest:'90초',  tip:'팔꿈치 45°, 가슴 중앙에 집중' },
+            { name:'랫풀다운 (머신)',          sets:'4세트', reps:'10회', intensity:'중강도',       rest:'90초',  tip:'광배근 먼저 사용, 상체 살짝 뒤로' },
+            { name:'체스트프레스 (머신)',      sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'보조 운동으로 볼륨 추가' },
+            { name:'시티드 로우 (머신)',       sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'날개뼈 모으기' },
+            { name:'덤벨 숄더프레스',         sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'어깨 올라가지 않게' },
+            { name:'덤벨 컬',                 sets:'3세트', reps:'12회', intensity:'중강도',       rest:'45초',  tip:'팔꿈치 고정, 천천히 내리기' },
+            ...(weakUpper ? [{ name:'✅ 보강: 푸시업', sets:'3세트', reps:'최대', intensity:'체중', rest:'60초', tip:'팔꿈치 45°, 가슴 끝까지 내리기' }] : []),
+          ]
+        },
+        {
+          day: '전신 (금) — 머신 + 프리웨이트 혼합',
+          exercises: [
+            { name:'핵 스쿼트 (머신)',         sets:'3세트', reps:'12회', intensity:'중강도',       rest:'90초',  tip:'볼륨 위주, 자세 집중' },
+            { name:'파워 레그프레스 (머신)',   sets:'3세트', reps:'12회', intensity: kg(lp1rm,p-5), rest:'90초',  tip:'중량 낮추고 횟수 확보' },
+            { name:'덤벨 벤트오버 로우',      sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'허리 곧게, 등 전체 수축' },
+            { name:'체스트 플라이 (머신)',     sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'가슴이 당기는 느낌 집중' },
+            { name:'플랭크',                  sets:'3세트', reps:'45초', intensity:'체중',         rest:'30초',  tip:'호흡 유지하며 버티기' },
+          ]
+        },
+      ];
+
+    } else {
+      // ── LEVEL 4-5: 고급 상하체 4분할 (주 4회) ──
+      // 기본 프리웨이트 위주 + 머신 보조
+      // 하체: 파워 레그프레스 + 핵 스쿼트
+      return [
+        {
+          day: '하체 A (월) — 프리웨이트 + 머신',
+          exercises: [
+            { name:'바벨 스쿼트',             sets:'4세트', reps:'8회',  intensity:'중~고강도',    rest:'120초', tip:'발 어깨너비, 허벅지 평행까지 앉기' },
+            { name:'파워 레그프레스 (머신)',   sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),  rest:'90초',  tip:'고중량, 천천히 내리기 (3초)' },
+            { name:'레그컬 (머신)',            sets:'3세트', reps:'10회', intensity:'고강도',      rest:'60초',  tip:'완전히 수축 후 천천히 이완' },
+            { name:'카프레이즈 (스탠딩)',      sets:'4세트', reps:'15회', intensity:'중강도',      rest:'45초',  tip:'발뒤꿈치 완전히 내리기' },
+            ...(weakLower ? [{ name:'✅ 보강: 핵 스쿼트 (머신)', sets:'3세트', reps:'15회', intensity:'중강도', rest:'60초', tip:'가벼운 중량으로 대퇴사두 집중' }] : []),
+          ]
+        },
+        {
+          day: '상체 A (수) — 프리웨이트 위주',
+          exercises: [
+            { name:'바벨 벤치프레스',         sets:'4세트', reps:'8회',  intensity: kg(bp1rm,p),  rest:'120초', tip:'팔꿈치 45~75°, 가슴 중앙에 집중' },
+            { name:'바벨 벤트오버 로우',      sets:'4세트', reps:'8회',  intensity:'중~고강도',   rest:'90초',  tip:'허리 곧게, 배꼽 쪽으로 당기기' },
+            { name:'덤벨 숄더프레스',         sets:'3세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip:'어깨 으쓱하지 않게' },
+            { name:'랫풀다운 (머신)',          sets:'3세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip:'광배근 완전 수축 확인' },
+            { name:'덤벨 컬',                 sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초',  tip:'팔꿈치 고정, 천천히 내리기' },
+            { name:'케이블 푸시다운',          sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초',  tip:'팔꿈치 옆구리 고정' },
+            ...(weakUpper ? [{ name:'✅ 보강: 체스트 플라이 (머신)', sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'45초', tip:'가슴 스트레칭 느끼기' }] : []),
+          ]
+        },
+        {
+          day: '하체 B (목) — 머신 위주',
+          exercises: [
+            { name:'핵 스쿼트 (머신)',         sets:'4세트', reps:'10회', intensity:'중~고강도',   rest:'90초',  tip:'발 위치 다양하게 시도 (근육 자극 변화)' },
+            { name:'파워 레그프레스 (발 높게)', sets:'3세트', reps:'12회', intensity: kg(lp1rm,p-10), rest:'90초', tip:'발 높게 두어 둔근 자극 강화' },
+            { name:'레그컬 (머신)',            sets:'4세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip:'햄스트링 완전 수축' },
+            { name:'레그 익스텐션 (머신)',     sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초',  tip:'마지막 회 1초 버티기' },
+            { name:'플랭크',                  sets:'3세트', reps:'60초', intensity:'체중',        rest:'30초',  tip:'코어 긴장 유지, 호흡 지속' },
+          ]
+        },
+        {
+          day: '상체 B (토) — 프리웨이트 + 머신 혼합',
+          exercises: [
+            { name:'덤벨 인클라인 벤치프레스', sets:'4세트', reps:'10회', intensity:'중강도',     rest:'90초',  tip:'30~45° 인클라인, 윗가슴 집중' },
+            { name:'바벨 벤트오버 로우',       sets:'4세트', reps:'10회', intensity:'중강도',     rest:'90초',  tip:'오버그립으로 상부 등 집중' },
+            { name:'덤벨 사이드 레터럴 레이즈', sets:'3세트', reps:'15회', intensity:'가벼운 덤벨', rest:'45초', tip:'팔꿈치 살짝 구부리고 어깨 높이까지' },
+            { name:'시티드 로우 (머신)',        sets:'3세트', reps:'12회', intensity:'중강도',     rest:'60초',  tip:'등 하부 광배근 집중' },
+            { name:'덤벨 컬',                  sets:'3세트', reps:'12회', intensity:'중강도',     rest:'45초',  tip:'천천히 내리기 (이완 집중)' },
+            { name:'케이블 푸시다운',           sets:'3세트', reps:'12회', intensity:'중강도',     rest:'45초',  tip:'팔꿈치 완전히 펴기' },
+          ]
+        },
+      ];
+    }
   }
 
-  // ── 유산소 구성 ──
-  const cardioStructure = lvIdx <= 1
-    ? '준비운동 5분 → 본운동 ' + cfg.cardioMin + '분 → 정리운동 5분'
-    : lvIdx <= 3
-    ? '준비운동 5분 → 본운동 ' + cfg.cardioMin + '분 (인터벌 가능) → 정리운동 5분'
-    : '준비운동 5분 → HIIT 20분 (고강도 40초 + 저강도 20초 반복) → 정리운동 5분';
+  // ── 주차별 강도별 세션 생성 ──
+  const weeklySessions = cfg.pct.map((p, wi) => ({
+    weekNum: wi + 1,
+    weekLabel: ['1주차 — 적응기', '2주차 — 기초 강화', '3주차 — 강도 증가', '4주차 — 피크 & 재평가'][wi],
+    weekFocus: ['동작 숙달 & 자세 교정에 집중하세요. 무게보다 자세가 우선입니다.',
+                '자세가 익숙해지면 중량을 조금씩 올려보세요. 3세트 모두 완료되면 다음 주 중량 증가 신호입니다.',
+                '본격적으로 강도를 높입니다. 마지막 2~3회가 힘들어야 적정 중량입니다.',
+                '이 달의 최고 강도로 마무리합니다. 다음 달 재측정을 통해 변화를 확인하세요.'][wi],
+    intensity: p + '%',
+    cardioMin: [Math.round(cfg.cMin*0.70), Math.round(cfg.cMin*0.85), cfg.cMin, cfg.cMin][wi],
+    sessions: makeSessions(p)
+  }));
 
+  // ── 유산소 ──
   const cardio = {
-    frequency: '주 ' + cfg.cardioDays + '회',
+    frequency: '주 ' + cfg.cDays + '회',
     type: cfg.cardioType,
     zone: cfg.zone,
-    targetHR: cfg.zoneHR,
-    duration: cfg.cardioMin + '분',
-    structure: cardioStructure,
-    intensity_note: lvIdx <= 1 ? '대화가 충분히 가능한 강도 유지' : lvIdx <= 3 ? '대화가 약간 어려운 강도' : '고강도 인터벌, 충분한 회복 필수'
+    targetHR: cfg.zHR,
+    duration: cfg.cMin + '분',
+    structure: lvIdx <= 1
+      ? '준비운동 5분 → 본운동 ' + cfg.cMin + '분 → 정리운동 5분'
+      : lvIdx <= 3
+      ? '준비운동 5분 → 본운동 ' + cfg.cMin + '분 → 정리운동 5분'
+      : '준비운동 5분 → 인터벌 (고강도 1분 + 저강도 1분 반복) ' + (cfg.cMin-10) + '분 → 정리 5분',
+    intensity_note: cfg.note
   };
-
-  // ── 주차별 점진 계획 ──
-  const weekly_progression = [
-    { week:'1주차', focus:'적응기',    strength_intensity:'1RM ' + cfg.strPct[0] + '%', cardio_duration: Math.round(cfg.cardioMin * 0.7) + '분', note:'동작 숙달 & 자세 교정에 집중' },
-    { week:'2주차', focus:'기초 강화', strength_intensity:'1RM ' + cfg.strPct[1] + '%', cardio_duration: Math.round(cfg.cardioMin * 0.85) + '분', note:'중량 소폭 증가, 세트 수 유지' },
-    { week:'3주차', focus:'강도 증가', strength_intensity:'1RM ' + cfg.strPct[2] + '%', cardio_duration: cfg.cardioMin + '분', note:'중량 5~10% 증가, 유산소 시간 달성' },
-    { week:'4주차', focus:'피크 & 평가', strength_intensity:'1RM ' + cfg.strPct[3] + '%', cardio_duration: cfg.cardioMin + '분+', note:'최고 강도 도전 후 다음달 재측정 계획' },
-  ];
 
   // ── 주의사항 ──
   const notesList = [];
-  if (weakLower)  notesList.push('하체 근력이 약한 편입니다 — 레그프레스, 스쿼트 세트 수 우선 확보하세요.');
-  if (weakUpper)  notesList.push('상체 근력 보강이 필요합니다 — 푸시업을 매일 루틴에 추가하면 효과적입니다.');
-  if (weakCardio) notesList.push('심폐 회복력이 낮습니다 — 유산소 운동 후 1분 심박수가 100 이하로 내려올 때까지 확인하세요.');
-  if (weakEndur)  notesList.push('근지구력 향상이 필요합니다 — 유산소 후 가벼운 푸시업/스쿼트 마무리를 권장합니다.');
-  notesList.push('운동 전 5~10분 동적 스트레칭, 운동 후 5~10분 정적 스트레칭을 반드시 실시하세요.');
-  notesList.push('수분은 운동 전·중·후 충분히 섭취하고, 단백질은 체중 1kg당 1.6~2.0g 목표로 섭취하세요.');
-  notesList.push('통증(근육통 제외)이 발생하면 즉시 운동을 중단하고 전문가 상담을 받으세요.');
+  if (weakLower)  notesList.push('하체 근력이 기준 이하입니다 — 레그프레스 세트 수를 우선 확보하세요.');
+  if (weakUpper)  notesList.push('상체 근력 보강이 필요합니다 — 체스트프레스·랫풀다운 중량을 점진적으로 늘리세요.');
+  if (weakCardio) notesList.push('심폐 회복력이 낮습니다 — 운동 후 1분간 심박수가 얼마나 내려오는지 측정해보세요.');
+  if (weakEndur)  notesList.push('근지구력 향상이 필요합니다 — 유산소 후 푸시업·크런치 마무리를 추가하세요.');
+  notesList.push('운동 전 5~10분 동적 스트레칭(팔돌리기, 레그스윙), 운동 후 5~10분 정적 스트레칭 필수.');
+  notesList.push('단백질 섭취: 체중 1kg당 1.6~2.0g 목표 (예: 70kg → 하루 112~140g).');
+  notesList.push('수면 7~8시간 확보 — 근육 회복의 70%는 수면 중 이루어집니다.');
+  notesList.push('통증(근육통 제외)이 느껴지면 즉시 중단하고 전문가 상담을 받으세요.');
 
   return {
-    schedule,
-    strength: { frequency: '주 ' + cfg.weightDays + '회', duration: lvIdx <= 1 ? '50분' : lvIdx <= 2 ? '60분' : '70분', split: cfg.split, sessions },
+    schedule: schedules[lvIdx],
+    strength: { frequency:'주 '+cfg.wDays+'회', duration: lvIdx<=1?'45분':lvIdx<=2?'55분':'65분', split:cfg.split, sessions:makeSessions(cfg.pct[0]) },
     cardio,
-    weekly_progression,
-    notes: notesList.join('\n• ')
+    weekly_sessions: weeklySessions,
+    notes: '• ' + notesList.join('\n• ')
   };
 }
 
@@ -1147,18 +1188,47 @@ function renderPlan(plan) {
     <div style="font-size:12px;color:#475569;margin-top:4px;">💡 ${plan.cardio.intensity_note}</div>
   </div>`;
 
-  // 주차별 계획
+  // 주차별 계획 (운동표 포함)
   const weekEl = document.getElementById('planWeekly');
   const wColors = ['#6366f1', '#3b82f6', '#10b981', '#f97316'];
-  weekEl.innerHTML = plan.weekly_progression.map((w, i) => `
-    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;padding:10px;background:#f8fafc;border-radius:10px;border-left:4px solid ${wColors[i]};">
-      <div style="min-width:60px;text-align:center;padding:6px;background:${wColors[i]};border-radius:8px;color:white;font-size:11px;font-weight:800;">${w.week}</div>
-      <div>
-        <div style="font-size:13px;font-weight:800;color:#0f172a;">${w.focus}</div>
-        <div style="font-size:11px;color:#475569;margin-top:2px;">💪 근력: ${w.strength_intensity} | 🏃 유산소: ${w.cardio_duration}</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:2px;">→ ${w.note}</div>
+  weekEl.innerHTML = plan.weekly_sessions.map((w, wi) => {
+    let sessHtml = w.sessions.map(session => {
+      let exRows = session.exercises.map(ex =>
+        `<tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:5px 6px;font-weight:600;">${ex.name}</td>
+          <td style="padding:5px 6px;text-align:center;">${ex.sets}</td>
+          <td style="padding:5px 6px;text-align:center;">${ex.reps}</td>
+          <td style="padding:5px 6px;text-align:center;color:${wColors[wi]};font-weight:700;">${ex.intensity}</td>
+          <td style="padding:5px 6px;text-align:center;">${ex.rest}</td>
+        </tr>
+        <tr style="background:#fffbeb;border-bottom:2px solid #f1f5f9;">
+          <td colspan="5" style="padding:3px 6px 6px;font-size:10px;color:#92400e;">💡 ${ex.tip}</td>
+        </tr>`
+      ).join('');
+      return `<div style="margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:800;color:white;background:${wColors[wi]};padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:4px;">${session.day}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <tr style="background:#f8fafc;">
+            <th style="padding:5px 6px;text-align:left;color:#64748b;">운동</th>
+            <th style="padding:5px 6px;color:#64748b;">세트</th>
+            <th style="padding:5px 6px;color:#64748b;">횟수</th>
+            <th style="padding:5px 6px;color:#64748b;">중량/강도</th>
+            <th style="padding:5px 6px;color:#64748b;">휴식</th>
+          </tr>
+          ${exRows}
+        </table>
+      </div>`;
+    }).join('');
+
+    return `<div style="margin-bottom:16px;border:2px solid ${wColors[wi]}30;border-radius:12px;overflow:hidden;">
+      <div style="background:${wColors[wi]};padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="color:white;font-weight:900;font-size:14px;">${w.weekLabel}</div>
+        <div style="color:white;font-size:11px;opacity:0.9;">근력 ${w.intensity} | 유산소 ${w.cardioMin}분</div>
       </div>
-    </div>`).join('');
+      <div style="padding:10px 12px;background:#fafafa;font-size:11px;color:#475569;border-bottom:1px solid #e2e8f0;">→ ${w.weekFocus}</div>
+      <div style="padding:12px;">${sessHtml}</div>
+    </div>`;
+  }).join('');
 
   // 주의사항
   document.getElementById('planNotes').innerHTML = '⚠️ <b>주의사항</b><br>' + plan.notes;
