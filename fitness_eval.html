@@ -1075,18 +1075,13 @@ function buildPlanFromData(ev) {
     }
   }
 
-  // ── 주차별 강도별 세션 생성 ──
-  const weeklySessions = cfg.pct.map((p, wi) => ({
-    weekNum: wi + 1,
-    weekLabel: ['1주차 — 적응기', '2주차 — 기초 강화', '3주차 — 강도 증가', '4주차 — 피크 & 재평가'][wi],
-    weekFocus: ['동작 숙달 & 자세 교정에 집중하세요. 무게보다 자세가 우선입니다.',
-                '자세가 익숙해지면 중량을 조금씩 올려보세요. 3세트 모두 완료되면 다음 주 중량 증가 신호입니다.',
-                '본격적으로 강도를 높입니다. 마지막 2~3회가 힘들어야 적정 중량입니다.',
-                '이 달의 최고 강도로 마무리합니다. 다음 달 재측정을 통해 변화를 확인하세요.'][wi],
-    intensity: p + '%',
-    cardioMin: [Math.round(cfg.cMin*0.70), Math.round(cfg.cMin*0.85), cfg.cMin, cfg.cMin][wi],
-    sessions: makeSessions(p)
-  }));
+  // ── 주차별 요약 (운동표 제거, 강도/포커스만) ──
+  const weekly_progression = [
+    { week:'1주차', focus:'적응기',      intensity: cfg.pct[0]+'%', cardioMin: Math.round(cfg.cMin*0.70)+'분', note:'동작 숙달 & 자세 교정에 집중. 무게보다 자세가 우선입니다.' },
+    { week:'2주차', focus:'기초 강화',   intensity: cfg.pct[1]+'%', cardioMin: Math.round(cfg.cMin*0.85)+'분', note:'자세가 익숙해지면 중량을 조금씩 올려보세요. 3세트 완료 시 다음 주 증량 신호입니다.' },
+    { week:'3주차', focus:'강도 증가',   intensity: cfg.pct[2]+'%', cardioMin: cfg.cMin+'분',                  note:'마지막 2~3회가 힘들어야 적정 중량입니다. 유산소 목표 시간을 달성하세요.' },
+    { week:'4주차', focus:'피크 & 재평가', intensity: cfg.pct[3]+'%', cardioMin: cfg.cMin+'분',                note:'이달 최고 강도로 마무리합니다. 다음 달 재측정으로 변화를 확인하세요.' },
+  ];
 
   // ── 유산소 ──
   const cardio = {
@@ -1118,7 +1113,7 @@ function buildPlanFromData(ev) {
     schedule: schedules[lvIdx],
     strength: { frequency:'주 '+cfg.wDays+'회', duration: lvIdx<=1?'45분':lvIdx<=2?'55분':'65분', split:cfg.split, sessions:makeSessions(cfg.pct[0]) },
     cardio,
-    weekly_sessions: weeklySessions,
+    weekly_progression,
     notes: '• ' + notesList.join('\n• ')
   };
 }
@@ -1188,47 +1183,23 @@ function renderPlan(plan) {
     <div style="font-size:12px;color:#475569;margin-top:4px;">💡 ${plan.cardio.intensity_note}</div>
   </div>`;
 
-  // 주차별 계획 (운동표 포함)
+  // 주차별 계획 (간결한 카드형)
   const weekEl = document.getElementById('planWeekly');
   const wColors = ['#6366f1', '#3b82f6', '#10b981', '#f97316'];
-  weekEl.innerHTML = plan.weekly_sessions.map((w, wi) => {
-    let sessHtml = w.sessions.map(session => {
-      let exRows = session.exercises.map(ex =>
-        `<tr style="border-bottom:1px solid #f1f5f9;">
-          <td style="padding:5px 6px;font-weight:600;">${ex.name}</td>
-          <td style="padding:5px 6px;text-align:center;">${ex.sets}</td>
-          <td style="padding:5px 6px;text-align:center;">${ex.reps}</td>
-          <td style="padding:5px 6px;text-align:center;color:${wColors[wi]};font-weight:700;">${ex.intensity}</td>
-          <td style="padding:5px 6px;text-align:center;">${ex.rest}</td>
-        </tr>
-        <tr style="background:#fffbeb;border-bottom:2px solid #f1f5f9;">
-          <td colspan="5" style="padding:3px 6px 6px;font-size:10px;color:#92400e;">💡 ${ex.tip}</td>
-        </tr>`
-      ).join('');
-      return `<div style="margin-bottom:10px;">
-        <div style="font-size:11px;font-weight:800;color:white;background:${wColors[wi]};padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:4px;">${session.day}</div>
-        <table style="width:100%;border-collapse:collapse;font-size:11px;">
-          <tr style="background:#f8fafc;">
-            <th style="padding:5px 6px;text-align:left;color:#64748b;">운동</th>
-            <th style="padding:5px 6px;color:#64748b;">세트</th>
-            <th style="padding:5px 6px;color:#64748b;">횟수</th>
-            <th style="padding:5px 6px;color:#64748b;">중량/강도</th>
-            <th style="padding:5px 6px;color:#64748b;">휴식</th>
-          </tr>
-          ${exRows}
-        </table>
-      </div>`;
-    }).join('');
-
-    return `<div style="margin-bottom:16px;border:2px solid ${wColors[wi]}30;border-radius:12px;overflow:hidden;">
-      <div style="background:${wColors[wi]};padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-        <div style="color:white;font-weight:900;font-size:14px;">${w.weekLabel}</div>
-        <div style="color:white;font-size:11px;opacity:0.9;">근력 ${w.intensity} | 유산소 ${w.cardioMin}분</div>
+  weekEl.innerHTML = plan.weekly_progression.map((w, i) => `
+    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;padding:12px;background:#f8fafc;border-radius:12px;border-left:4px solid ${wColors[i]};">
+      <div style="min-width:56px;text-align:center;">
+        <div style="background:${wColors[i]};color:white;border-radius:8px;padding:5px 4px;font-size:11px;font-weight:800;">${w.week}</div>
+        <div style="margin-top:4px;font-size:10px;font-weight:700;color:${wColors[i]};">${w.focus}</div>
       </div>
-      <div style="padding:10px 12px;background:#fafafa;font-size:11px;color:#475569;border-bottom:1px solid #e2e8f0;">→ ${w.weekFocus}</div>
-      <div style="padding:12px;">${sessHtml}</div>
-    </div>`;
-  }).join('');
+      <div style="flex:1;">
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <span style="background:${wColors[i]}20;color:${wColors[i]};border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;">💪 근력 ${w.intensity}</span>
+          <span style="background:#10b98120;color:#10b981;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;">🏃 유산소 ${w.cardioMin}</span>
+        </div>
+        <div style="font-size:11px;color:#64748b;line-height:1.5;">→ ${w.note}</div>
+      </div>
+    </div>`).join('');
 
   // 주의사항
   document.getElementById('planNotes').innerHTML = '⚠️ <b>주의사항</b><br>' + plan.notes;
