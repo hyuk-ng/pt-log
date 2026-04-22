@@ -284,17 +284,6 @@ select.fi{cursor:pointer;}
       <div class="analysis-box" id="analysisBox">회원을 선택하고 회차를 클릭하면 저장된 분석 결과가 표시됩니다.</div>
     </div>
     <button class="btn btn-cap" onclick="captureReport()">📸 리포트 이미지 저장</button>
-
-    <!-- AI 1개월 운동 프로그램 카드 -->
-    <div class="card" id="programCard" style="display:none;margin-top:10px;">
-      <div class="card-title">📋 맞춤 1개월 운동 프로그램</div>
-      <div id="programContent" style="font-size:13px;line-height:1.8;color:#475569;">
-        <div style="text-align:center;padding:20px;color:#94a3b8;">
-          <div style="font-size:32px;margin-bottom:8px;">⏳</div>
-          <div>운동 프로그램을 생성 중입니다...</div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- TAB 2: 운동플랜 -->
@@ -416,7 +405,30 @@ else if(tab===4){loadHist(n);}});}
 document.addEventListener('click',e=>{document.querySelectorAll('.ms-dd').forEach(d=>{if(!e.target.closest('.ms-wrap'))d.classList.remove('show');});});
 function showAddModal(){document.getElementById('newName').value='';document.getElementById('addModal').classList.add('show');setTimeout(()=>document.getElementById('newName').focus(),100);}
 async function addMemberOk(){const n=document.getElementById('newName').value.trim();if(!n)return;document.getElementById('addModal').classList.remove('show');toast('⏳ 등록중...');const r=await api({action:'add_member',member:n});if(r.success){toast('✅ '+n+' 등록!');loadM();document.getElementById('ms0').value=n;document.getElementById('selMember').value=n;}else toast('❌ '+(r.error||'실패'));}
-async function refreshAll(){toast('📥 불러오는 중...');await loadM();toast('✅ 완료!');}
+async function refreshAll(){
+  const member = document.getElementById('selMember').value;
+  toast('📥 불러오는 중...');
+  await loadM();
+  // 회원이 선택된 경우 최신 회차에서 나이/성별/신장만 불러오기
+  if(member){
+    try{
+      const r = await fetch(API+'?action=get_evals&member='+encodeURIComponent(member));
+      const d = await r.json();
+      if(d.success && d.evals && d.evals.length > 0){
+        const latest = d.evals[d.evals.length - 1];
+        if(latest.age)  document.getElementById('mAge').value = latest.age;
+        if(latest.gender) document.getElementById('mGender').value = latest.gender;
+        if(latest.height) document.getElementById('mH').value = latest.height;
+        calcBMI();
+        toast('✅ '+member+'님 기본정보(나이/성별/신장) 불러옴!');
+      } else {
+        toast('✅ 불러오기 완료 (측정 기록 없음)');
+      }
+    }catch(e){ toast('✅ 회원목록 불러오기 완료'); }
+  } else {
+    toast('✅ 완료!');
+  }
+}
 async function deleteMember(){
   const n=document.getElementById('selMember').value;
   if(!n){toast('⚠️ 삭제할 회원을 선택하세요!');return;}
@@ -536,8 +548,14 @@ function gradeColor(g){return g<=1?'#10b981':g<=2?'#3b82f6':g<=3?'#f97316':g<=4?
 
 let radarChart=null;
 function updateReport(result){
+  // 탭을 먼저 전환해서 DOM이 visible 상태에서 업데이트
+  switchTab(1);
   const lv=LEVELS[result.lvIdx];
-  document.getElementById('totalScore').textContent=result.total;
+  // 점수 강제 리셋 후 재설정 (같은 값도 반드시 반영)
+  const scoreEl=document.getElementById('totalScore');
+  scoreEl.textContent='';
+  void scoreEl.offsetWidth; // 강제 리플로우
+  scoreEl.textContent=result.total;
   const badge=document.getElementById('lvBadge');badge.textContent=lv.title;badge.style.background=lv.color;
   const msg=document.getElementById('lvMsg');msg.textContent=lv.msg;msg.style.color=lv.color;
   if(result.memberName)document.getElementById('reportMemberName').textContent=result.memberName;
@@ -551,7 +569,6 @@ function updateReport(result){
   radarChart=new Chart(ctx,{type:'radar',data:{labels:['하체','상체','지구력','심폐회복','체지방'],
   datasets:[{data:result.grades.map(g=>10-g),backgroundColor:lv.color+'33',borderColor:lv.color,borderWidth:3,pointRadius:5}]},
   options:{scales:{r:{min:0,max:10,ticks:{display:false},pointLabels:{font:{size:14,weight:'bold',family:'Noto Sans KR'}}}},plugins:{legend:{display:false}}}});
-  switchTab(1);
 }
 
 // ═══ ANALYZE & SAVE ═══
@@ -737,12 +754,46 @@ async function loadGraph(name){document.getElementById('graphEmpty').style.displ
 try{const r=await fetch(API+'?action=get_evals&member='+encodeURIComponent(name));const d=await r.json();if(d.success){gData=d.evals||[];renderChips();renderLine();}}catch(e){toast('❌ 로드 실패');}}
 
 // ═══ HISTORY ═══
-async function loadHist(name){document.getElementById('histEmpty').style.display='none';const list=document.getElementById('histList');list.innerHTML='';
-try{const r=await fetch(API+'?action=get_evals&member='+encodeURIComponent(name));const d=await r.json();if(d.success){const evals=d.evals||[];
-if(!evals.length){list.innerHTML='<div class="empty-msg">측정 기록이 없습니다</div>';return;}
-evals.forEach((ev,i)=>{const sc=ev.totalScore||'-';const lv=ev.level||'';const c=document.createElement('div');c.className='hist-card';
-c.innerHTML=`<div class="hist-score" style="color:${sc>=80?'#10b981':sc>=60?'#3b82f6':sc>=40?'#f97316':'#ef4444'}">${sc}</div><div class="hist-info"><div class="hist-date">${i+1}회차 — ${ev.date}</div><div class="hist-sub">${lv} | 체중:${ev.weight||'-'}kg 체지방:${ev.bf||'-'}%</div></div>`;
-c.onclick=()=>showDetail(ev,i);list.appendChild(c);});}}catch(e){toast('❌ 로드 실패');}}
+async function loadHist(name){
+  document.getElementById('histEmpty').style.display='none';
+  const list=document.getElementById('histList');
+  list.innerHTML='';
+  try{
+    const r=await fetch(API+'?action=get_evals&member='+encodeURIComponent(name));
+    const d=await r.json();
+    if(d.success){
+      const evals=d.evals||[];
+      if(!evals.length){list.innerHTML='<div class="empty-msg">측정 기록이 없습니다</div>';return;}
+      evals.forEach((ev,i)=>{
+        const sc=ev.totalScore||'-';
+        const lv=ev.level||'';
+        const c=document.createElement('div');
+        c.className='hist-card';
+        c.innerHTML=`
+          <div class="hist-score" style="color:${sc>=80?'#10b981':sc>=60?'#3b82f6':sc>=40?'#f97316':'#ef4444'}">${sc}</div>
+          <div class="hist-info">
+            <div class="hist-date">${i+1}회차 — ${ev.date}</div>
+            <div class="hist-sub">${lv} | 체중:${ev.weight||'-'}kg 체지방:${ev.bf||'-'}%</div>
+          </div>
+          <button class="hist-del" title="이 회차 삭제" onclick="event.stopPropagation();confirmDeleteEval('${name}',${i},'${ev.date}')">🗑</button>`;
+        c.onclick=()=>showDetail(ev,i);
+        list.appendChild(c);
+      });
+    }
+  }catch(e){toast('❌ 로드 실패');}
+}
+
+async function confirmDeleteEval(member, idx, date){
+  if(!confirm((idx+1)+'회차 ('+date+') 기록을 삭제하시겠습니까?\n삭제 후 복구가 불가능합니다.')){return;}
+  toast('⏳ 삭제 중...');
+  const r=await api({action:'delete_eval', member, evalIndex:idx});
+  if(r.success){
+    toast('✅ '+(idx+1)+'회차 삭제 완료');
+    loadHist(member); // 목록 새로고침
+  } else {
+    toast('❌ '+(r.error||'삭제 실패'));
+  }
+}
 function showDetail(ev,i){document.getElementById('detailTitle').textContent=(i+1)+'회차 ('+ev.date+')';
 let h=`<table style="width:100%;font-size:12px;"><tr><td><b>체중</b></td><td>${ev.weight||'-'}kg</td><td><b>체지방</b></td><td>${ev.bf||'-'}%</td></tr>`;
 h+=`<tr><td><b>골격근</b></td><td>${ev.smm||'-'}kg</td><td><b>BMI</b></td><td>${ev.bmi||'-'}</td></tr>`;
