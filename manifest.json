@@ -2,7 +2,7 @@
   "name": "Body Spectrum Pro",
   "short_name": "바디스펙트럼",
   "description": "퍼스널 트레이너 전용 체력측정 평가 시스템",
-  "start_url": "/pt-log/피트니스 평가.html",
+  "start_url": "/pt-log/fitness_eval.html",
   "scope": "/pt-log/",
   "display": "standalone",
   "orientation": "portrait",
