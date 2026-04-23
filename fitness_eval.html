@@ -616,18 +616,73 @@ async function analyzeAndSave(){
 
   // 체성분
   analysis+='<div style="margin-bottom:12px;"><b>🔬 체성분 분석</b><br>';
-  if(bmi>0){
-    if(bmi<18.5)analysis+='BMI '+bmi+'로 <span style="color:#3b82f6">저체중</span>입니다. 근육량 증가를 위한 점진적 저항 운동과 단백질 섭취(체중 1kg당 1.6~2.2g)를 권장합니다.<br>';
-    else if(bmi<23)analysis+='BMI '+bmi+'로 <span style="color:#10b981">정상 범위</span>입니다. 현재 체중을 유지하면서 체지방 대비 근육량 비율 개선에 집중하세요.<br>';
-    else if(bmi<25)analysis+='BMI '+bmi+'로 <span style="color:#f97316">과체중 경계</span>입니다. 주 3~4회 유산소 운동(30분 이상)과 식이 관리를 병행하세요.<br>';
-    else analysis+='BMI '+bmi+'로 <span style="color:#ef4444">비만 구간</span>입니다. 관절 부담을 줄이는 저충격 유산소(수영, 자전거)부터 시작하고, 전문 영양 상담을 권장합니다.<br>';
-  }
-  if(bf>0){
+  if(bmi>0 && bf>0){
+    const bfStd = gender==='남' ? {good:15, avg:20, high:25} : {good:22, avg:28, high:33};
+    const bfGood  = bf <= bfStd.good;
+    const bfNorm  = bf <= bfStd.avg  && !bfGood;
+    const bfOver  = bf <= bfStd.high && !bfGood && !bfNorm;
+    const bfHigh  = bf >  bfStd.high;
+
+    const bmiLow  = bmi < 18.5;
+    const bmiNorm = bmi >= 18.5 && bmi < 23;
+    const bmiOvW  = bmi >= 23   && bmi < 25;
+    const bmiObe  = bmi >= 25;
+
+    analysis += '<b>📊 체성분 종합 분석</b><br>';
+
+    // ── 저체중 (BMI < 18.5) ──
+    if(bmiLow && bfGood)
+      analysis += 'BMI '+bmi+'(저체중) / 체지방 '+bf+'%(우수) — <span style="color:#3b82f6">근육 부족형 저체중</span>입니다. 체중은 낮지만 체지방도 낮아 근육량 자체가 부족한 상태입니다. 고단백 식단(체중 1kg당 2.0~2.2g)과 근력 운동으로 근육량 증가를 최우선 목표로 하세요.<br>';
+    else if(bmiLow && bfNorm)
+      analysis += 'BMI '+bmi+'(저체중) / 체지방 '+bf+'%(표준) — <span style="color:#3b82f6">전반적 저체중</span>입니다. 체중과 근육량이 모두 부족합니다. 전신 근력 운동과 칼로리 증가(+300~500kcal/일)를 병행하세요.<br>';
+    else if(bmiLow && bfOver)
+      analysis += 'BMI '+bmi+'(저체중) / 체지방 '+bf+'%(표준이상) — <span style="color:#f97316">저체중 마른비만</span>입니다. 체중은 낮지만 지방 비율이 높고 근육이 매우 부족한 상태입니다. 근력 운동을 최우선으로 하고 단백질 섭취를 늘리세요.<br>';
+    else if(bmiLow && bfHigh)
+      analysis += 'BMI '+bmi+'(저체중) / 체지방 '+bf+'%(높음) — <span style="color:#ef4444">심각한 근감소 상태</span>입니다. 체중이 낮음에도 체지방률이 높아 근육이 극히 부족합니다. 의료진 상담 후 단계적 근력 운동을 시작하세요.<br>';
+
+    // ── 정상 (BMI 18.5~22.9) ──
+    else if(bmiNorm && bfGood)
+      analysis += 'BMI '+bmi+'(정상) / 체지방 '+bf+'%(우수) — <span style="color:#10b981">이상적인 체성분</span>입니다. 체중과 체지방 모두 최적 상태입니다. 현재를 유지하면서 근력 향상에 집중하세요.<br>';
+    else if(bmiNorm && bfNorm)
+      analysis += 'BMI '+bmi+'(정상) / 체지방 '+bf+'%(표준) — <span style="color:#10b981">양호한 체성분</span>입니다. 균형 잡힌 상태입니다. 근력+유산소 병행으로 체지방 비율을 조금 더 낮춰보세요.<br>';
+    else if(bmiNorm && bfOver)
+      analysis += 'BMI '+bmi+'(정상) / 체지방 '+bf+'%(표준이상) — <span style="color:#f97316">마른비만 경계</span>입니다. BMI는 정상이지만 체지방이 높고 근육이 부족합니다. 유산소보다 근력 운동 비중을 높이세요.<br>';
+    else if(bmiNorm && bfHigh)
+      analysis += 'BMI '+bmi+'(정상) / 체지방 '+bf+'%(높음) — <span style="color:#ef4444">마른비만(Skinny Fat)</span>입니다. 겉보기엔 정상이지만 지방이 많고 근육이 매우 부족합니다. 근력 운동 + 식단 관리를 동시에 진행하세요.<br>';
+
+    // ── 과체중 경계 (BMI 23~24.9) ──
+    else if(bmiOvW && bfGood)
+      analysis += 'BMI '+bmi+'(과체중경계) / 체지방 '+bf+'%(우수) — <span style="color:#10b981">근육형 체형</span>입니다. BMI가 높게 나왔지만 체지방이 낮으므로 이는 근육량이 많아서입니다. BMI보다 체지방률이 더 정확한 지표이며, 현재 체성분은 매우 양호합니다.<br>';
+    else if(bmiOvW && bfNorm)
+      analysis += 'BMI '+bmi+'(과체중경계) / 체지방 '+bf+'%(표준) — <span style="color:#3b82f6">체중 관리 필요</span>입니다. 체지방은 표준이나 체중이 다소 높습니다. 근력 유지하면서 유산소로 체중을 조금 줄여보세요.<br>';
+    else if(bmiOvW && bfOver)
+      analysis += 'BMI '+bmi+'(과체중경계) / 체지방 '+bf+'%(표준이상) — <span style="color:#f97316">체지방 감소 필요</span>입니다. 체중과 체지방 모두 높은 편입니다. 주 4회 이상 유산소+근력 병행과 식이 관리가 필요합니다.<br>';
+    else if(bmiOvW && bfHigh)
+      analysis += 'BMI '+bmi+'(과체중경계) / 체지방 '+bf+'%(높음) — <span style="color:#ef4444">체지방 집중 감소 필요</span>입니다. 체중과 체지방 모두 높습니다. 저강도 유산소부터 시작해 점진적으로 강도를 높이고 식단 관리를 병행하세요.<br>';
+
+    // ── 비만 (BMI ≥ 25) ──
+    else if(bmiObe && bfGood)
+      analysis += 'BMI '+bmi+'(비만) / 체지방 '+bf+'%(우수) — <span style="color:#10b981">고근육 근육형 체형</span>입니다. BMI가 높지만 체지방이 매우 낮으므로 근육량이 상당히 많은 상태입니다. 체성분 자체는 우수하며 부상 방지와 기능성 훈련에 집중하세요.<br>';
+    else if(bmiObe && bfNorm)
+      analysis += 'BMI '+bmi+'(비만) / 체지방 '+bf+'%(표준) — <span style="color:#3b82f6">근육형 과체중</span>입니다. 근육량이 많아 BMI가 높게 나온 경향이 있습니다. 현재 체지방은 표준이므로 근력 유지하면서 체중 변화를 모니터링하세요.<br>';
+    else if(bmiObe && bfOver)
+      analysis += 'BMI '+bmi+'(비만) / 체지방 '+bf+'%(표준이상) — <span style="color:#f97316">복합 관리 필요</span>입니다. 체중과 체지방 모두 높습니다. 관절 부담을 줄이는 저충격 유산소(수영, 자전거)부터 시작하세요.<br>';
+    else if(bmiObe && bfHigh)
+      analysis += 'BMI '+bmi+'(비만) / 체지방 '+bf+'%(높음) — <span style="color:#ef4444">적극적 체중 관리 필요</span>입니다. 체중과 체지방 모두 높은 상태입니다. 저강도 유산소부터 시작하고 전문 영양 상담을 권장합니다.<br>';
+
+  } else if(bmi>0) {
+    // 체지방률 없을 때 BMI만
+    if(bmi<18.5) analysis+='BMI '+bmi+'로 <span style="color:#3b82f6">저체중</span>입니다. 근육량 증가를 위한 저항 운동과 단백질 섭취를 권장합니다.<br>';
+    else if(bmi<23) analysis+='BMI '+bmi+'로 <span style="color:#10b981">정상 범위</span>입니다.<br>';
+    else if(bmi<25) analysis+='BMI '+bmi+'로 <span style="color:#f97316">과체중 경계</span>입니다. 유산소와 식이 관리를 병행하세요.<br>';
+    else analysis+='BMI '+bmi+'로 <span style="color:#ef4444">비만 구간</span>입니다. 저충격 유산소부터 시작하세요.<br>';
+  } else if(bf>0) {
+    // BMI 없을 때 체지방률만
     const bfStd=gender==='남'?{good:15,avg:20,high:25}:{good:22,avg:28,high:33};
-    if(bf<=bfStd.good)analysis+='체지방률 '+bf+'%로 '+gender+'성 기준 <span style="color:#10b981">우수</span>합니다. 근력 트레이닝 위주로 진행하세요.<br>';
-    else if(bf<=bfStd.avg)analysis+='체지방률 '+bf+'%로 '+gender+'성 기준 <span style="color:#3b82f6">표준</span>입니다. 유산소+근력 병행으로 체지방 감소를 노려보세요.<br>';
-    else if(bf<=bfStd.high)analysis+='체지방률 '+bf+'%로 '+gender+'성 기준 <span style="color:#f97316">표준 이상</span>입니다. 주 4회 이상 중강도 유산소 운동이 필요합니다.<br>';
-    else analysis+='체지방률 '+bf+'%로 '+gender+'성 기준 <span style="color:#ef4444">높음</span>입니다. 식이요법과 저강도 유산소를 우선 실시하고 점진적으로 강도를 높이세요.<br>';
+    if(bf<=bfStd.good) analysis+='체지방률 '+bf+'%로 <span style="color:#10b981">우수</span>합니다.<br>';
+    else if(bf<=bfStd.avg) analysis+='체지방률 '+bf+'%로 <span style="color:#3b82f6">표준</span>입니다.<br>';
+    else if(bf<=bfStd.high) analysis+='체지방률 '+bf+'%로 <span style="color:#f97316">표준이상</span>입니다.<br>';
+    else analysis+='체지방률 '+bf+'%로 <span style="color:#ef4444">높음</span>입니다.<br>';
   }
   if(waist>0){
     const waistRisk=gender==='남'?90:85;
@@ -978,9 +1033,15 @@ function buildPlanFromData(ev) {
   const strongLower= gL === 'strong';
   const strongUpper= gU === 'strong';
 
-  // ── 패턴 분류 (주요 케이스) ──
-  // 패턴에 따라 스케줄·운동구성·유산소가 실제로 달라짐
-  let pattern = 'balanced'; // 기본: 균형
+  // ── 체성분 플래그 ──
+  const bfStdPlan  = gender==='남' ? {good:15, high:25} : {good:22, high:33};
+  const bmi        = weight>0 && ev.height>0 ? parseFloat((weight/((ev.height/100)**2)).toFixed(1)) : parseFloat(ev.bmi)||0;
+  const isSkinnyFat  = bf>0 && bmi>0 && bmi<23  && bf>bfStdPlan.high;   // 마른비만
+  const isObeseHighBF= bf>0 && bmi>0 && bmi>=25 && bf>bfStdPlan.high;   // 비만+고체지방
+  const isMuscular   = bf>0 && bmi>0 && bmi>=23 && bf<=bfStdPlan.good;  // 근육형
+
+  // ── 패턴 분류 ──
+  let pattern = 'balanced';
   let patternLabel = '';
   let patternNote = '';
 
@@ -1020,6 +1081,18 @@ function buildPlanFromData(ev) {
     pattern = 'strength_no_cardio';
     patternLabel = '💪❤️ 근력 우수 / 심폐 보강 타입';
     patternNote = '근력 훈련을 유지하면서 심폐 능력을 집중 개선합니다.';
+  } else if (isSkinnyFat) {
+    pattern = 'skinny_fat';
+    patternLabel = '⚡ 마른비만 교정 타입';
+    patternNote = 'BMI는 정상이지만 체지방이 높고 근육이 부족합니다. 근력 운동을 우선하고 유산소를 병행합니다.';
+  } else if (isObeseHighBF) {
+    pattern = 'obese_highbf';
+    patternLabel = '🔥 체지방 집중 감소 타입';
+    patternNote = '체중과 체지방 모두 높습니다. 저강도 유산소부터 시작해 점진적으로 강도를 높입니다.';
+  } else if (isMuscular) {
+    pattern = 'muscular';
+    patternLabel = '💎 근육형 체형 유지 타입';
+    patternNote = 'BMI는 높지만 체지방이 낮은 근육형 체형입니다. 근력 유지 위주로 설계합니다.';
   } else {
     pattern = 'balanced';
     patternLabel = '✅ 균형 발전 타입';
@@ -1057,6 +1130,36 @@ function buildPlanFromData(ev) {
         intensity_note: '유산소 후 체중운동 서킷으로 근지구력을 함께 강화합니다.'
       };
     }
+    // 마른비만: 유산소 빈도 늘리고 근력 병행 강조
+    if (pattern === 'skinny_fat') {
+      return { ...base,
+        frequency: '주 ' + Math.min(cfg.cDays+1, 5) + '회',
+        duration: (cfg.cMin+5) + '분',
+        type: '중강도 유산소 (트레드밀 속보 or 사이클) + 근력 병행',
+        structure: '준비 5분 → 중강도 유산소 ' + cfg.cMin + '분 → 정리 5분 (근력 세션과 같은 날 병행)',
+        intensity_note: '체지방 감소와 근육 증가를 동시에 목표. 유산소 강도는 최대심박수 60~70% 유지.'
+      };
+    }
+    // 비만+고체지방: 저강도 유산소 우선, 시간 증가
+    if (pattern === 'obese_highbf') {
+      return { ...base,
+        frequency: '주 ' + Math.min(cfg.cDays+2, 5) + '회 (체지방 집중)',
+        duration: (cfg.cMin+15) + '분',
+        type: '저강도 유산소 (걷기, 실내자전거, 수중운동)',
+        structure: '준비 5분 → 저강도 유산소 ' + (cfg.cMin+10) + '분 → 정리 5분',
+        intensity_note: '관절 부담 최소화. 최대심박수 50~60% 저강도로 시작해 매주 5분씩 늘려가세요.'
+      };
+    }
+    // 근육형: 유산소 최소화, 근력 유지 위주
+    if (pattern === 'muscular') {
+      return { ...base,
+        frequency: '주 2회 (유지)',
+        duration: Math.max(cfg.cMin-10, 20) + '분',
+        type: '저~중강도 유산소 (사이클, 로잉머신)',
+        structure: '준비 5분 → 중강도 유산소 ' + Math.max(cfg.cMin-10, 20) + '분 → 정리 5분',
+        intensity_note: '근육 손실 방지를 위해 유산소 과다는 피하세요. 근력 세션에 집중하는 것이 우선입니다.'
+      };
+    }
     return base;
   }
 
@@ -1083,22 +1186,38 @@ function buildPlanFromData(ev) {
     if ((pattern === 'weak_upper' || pattern === 'strong_lower_weak_upper') && lvIdx >= 3) {
       return { '월':'상체A','화':'하체','수':'유산소','목':'상체B','금':'하체','토':'상체+유산소','일':'휴식' };
     }
+    // 마른비만: 근력+유산소 병행, 유산소 빈도 증가
+    if (pattern === 'skinny_fat') {
+      if(lvIdx <= 1) return { '월':'웨이트','화':'유산소','수':'유산소','목':'웨이트','금':'유산소','토':'유산소','일':'휴식' };
+      return { '월':'웨이트','화':'유산소','수':'웨이트','목':'유산소','금':'웨이트','토':'유산소','일':'휴식' };
+    }
+    // 비만+고체지방: 유산소 빈도 최대화
+    if (pattern === 'obese_highbf') {
+      if(lvIdx <= 1) return { '월':'유산소','화':'웨이트','수':'유산소','목':'유산소','금':'웨이트','토':'유산소','일':'휴식' };
+      return { '월':'웨이트','화':'유산소','수':'유산소','목':'웨이트','금':'유산소','토':'유산소','일':'휴식' };
+    }
+    // 근육형: 유산소 최소, 근력 중심
+    if (pattern === 'muscular') {
+      if(lvIdx <= 1) return { '월':'웨이트','화':'휴식','수':'유산소','목':'웨이트','금':'휴식','토':'유산소','일':'휴식' };
+      if(lvIdx === 2) return { '월':'웨이트','화':'웨이트','수':'유산소','목':'웨이트','금':'휴식','토':'유산소','일':'휴식' };
+      return { '월':'웨이트','화':'웨이트','수':'유산소','목':'웨이트','금':'웨이트','토':'유산소','일':'휴식' };
+    }
     return base;
   }
 
   // ── 패턴별 주의사항 ──
   function getNotes() {
     const list = [];
-    // 패턴별 핵심 메시지
     list.push(patternNote);
-    // 약점별 구체적 처방
     if (weakLower) list.push('하체 근력 강화: 파워 레그프레스 목표 중량 = 체중×' + (gender==='남'?'1.8':'1.2') + '배. 매주 2.5kg씩 증량을 목표로 하세요.');
-    if (weakUpper) list.push('상체 근력 강화: 벤치프레스 목표 중량 = 체중×' + (gender==='남'?'0.8':'0.5') + '배. 푸시업 보조 운동을 세션 마다 추가하세요.');
+    if (weakUpper) list.push('상체 근력 강화: 벤치프레스 목표 중량 = 체중×' + (gender==='남'?'0.8':'0.5') + '배. 푸시업 보조 운동을 세션마다 추가하세요.');
     if (weakCardio) list.push('심폐 개선: 운동 직후 심박수와 1분 후 심박수를 기록하세요. 차이가 클수록 심폐 기능이 좋아지는 신호입니다.');
     if (weakEndur) list.push('근지구력 개선: 세트 간 휴식을 60초 이내로 줄이고, 마지막 세트는 최대 반복까지 수행하세요.');
-    if (strongLower && weakUpper) list.push('하체와 상체 불균형이 있습니다. 상체 운동을 세션 초반(에너지 충분할 때)에 배치하세요.');
-    if (strongUpper && weakLower) list.push('상체와 하체 불균형이 있습니다. 하체 운동을 세션 초반에 배치하고 하체 세션을 주 2회 이상 확보하세요.');
-    // 공통
+    if (strongLower && weakUpper) list.push('하체와 상체 불균형이 있습니다. 상체 운동을 세션 초반에 배치하세요.');
+    if (strongUpper && weakLower) list.push('상체와 하체 불균형이 있습니다. 하체 운동을 세션 초반에 배치하고 주 2회 이상 확보하세요.');
+    if (isSkinnyFat) list.push('마른비만 교정: 체중 변화보다 체지방률 변화를 기준으로 삼으세요. 근력 운동으로 근육이 늘면 체중이 유지되거나 소폭 증가해도 정상입니다.');
+    if (isObeseHighBF) list.push('체지방 감소: 처음 4주는 저강도 유산소에 집중하세요. 무릎·허리에 통증이 생기면 즉시 강도를 줄이세요. 식단은 하루 300~500kcal 적자를 목표로 하세요.');
+    if (isMuscular) list.push('근육형 체형 유지: 유산소 과다 시 근육 손실 위험이 있습니다. 세션당 유산소는 30분 이내로 제한하고, 단백질 섭취(체중 1kg당 2.0~2.2g)를 충분히 유지하세요.');
     list.push('운동 전 5~10분 동적 스트레칭, 운동 후 5~10분 정적 스트레칭 필수.');
     list.push('단백질: 체중 1kg당 1.6~2.0g (예: 70kg → 하루 112~140g).');
     list.push('수면 7~8시간 확보 — 근육 회복의 70%는 수면 중 이루어집니다.');
@@ -1291,6 +1410,118 @@ function buildPlanFromData(ev) {
   function makeSessions(pct) {
     const p = pct;
     const isFemale = gender === '여';
+
+    // ══ 체성분 특수 패턴 — 레벨 무관하게 먼저 처리 ══
+
+    // 마른비만: 근력+유산소 병행, 고반복 서킷 중심
+    if (pattern === 'skinny_fat') {
+      const lm = pick(DB.lowerMachine, 3, 0);
+      const cm = pick(DB.chestMachine, 1, 10);
+      const bm = pick(DB.backMachine,  2, 20);
+      const sh = pick(DB.shoulder,     1, 30);
+      const co = pick(DB.core,         3, 40);
+      return [
+        { day: '전신 A (월) — 근력 기초', exercises: [
+          { name:'파워 레그프레스 (머신)', sets:'3세트', reps:'15회', intensity: kg(lp1rm,65), rest:'60초', tip:'마른비만 — 근육 증가 위주, 고반복' },
+          { name: cm[0].name,            sets:'3세트', reps:'15회', intensity: kg(bp1rm,65), rest:'60초', tip: cm[0].tip },
+          { name: bm[0].name,            sets:'3세트', reps:'15회', intensity:'중강도',       rest:'60초', tip: bm[0].tip },
+          { name: lm[1].name,            sets:'3세트', reps:'15회', intensity:'중강도',       rest:'45초', tip: lm[1].tip },
+          { name: co[0].name,            sets:'3세트', reps:'30초', intensity:'체중',         rest:'30초', tip: co[0].tip },
+        ]},
+        { day: '유산소 서킷 (수) — 체지방 감소', exercises: [
+          ...endurBoostBlock(),
+          ...cardioFinishBlock(),
+          { name: co[1].name, sets:'3세트', reps:'20회', intensity:'체중', rest:'30초', tip: co[1].tip },
+        ]},
+        { day: '전신 B (금) — 근력 + 서킷', exercises: [
+          { name: lm[0].name, sets:'3세트', reps:'12회', intensity: kg(lp1rm,70), rest:'90초', tip: lm[0].tip },
+          { name: bm[1].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: bm[1].tip },
+          { name: sh[0].name, sets:'3세트', reps:'15회', intensity:'중강도',       rest:'45초', tip: sh[0].tip },
+          ...cardioFinishBlock(),
+          { name: co[2].name, sets:'3세트', reps:'15회', intensity:'체중',         rest:'30초', tip: co[2].tip },
+        ]},
+      ];
+    }
+
+    // 비만+고체지방: 저강도 유산소 우선, 근력은 머신으로 가볍게
+    if (pattern === 'obese_highbf') {
+      const lm = pick(DB.lowerMachine, 3, 0);
+      const cm = pick(DB.chestMachine, 1, 10);
+      const bm = pick(DB.backMachine,  2, 20);
+      const co = pick(DB.core,         2, 30);
+      return [
+        { day: '전신 A (월) — 저강도 머신', exercises: [
+          { name:'파워 레그프레스 (머신)', sets:'2세트', reps:'15회', intensity: kg(lp1rm,55), rest:'90초', tip:'관절 부담 최소화 — 가벼운 중량으로 시작' },
+          { name: cm[0].name,            sets:'2세트', reps:'15회', intensity: kg(bp1rm,55), rest:'90초', tip: cm[0].tip },
+          { name: bm[0].name,            sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'60초', tip: bm[0].tip },
+          { name: lm[1].name,            sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'60초', tip: lm[1].tip },
+          { name: co[0].name,            sets:'2세트', reps:'20초', intensity:'체중',        rest:'45초', tip: co[0].tip },
+        ]},
+        { day: '유산소 (수) — 저강도', exercises: [
+          { name:'실내 자전거 또는 걷기', sets:'1세트', reps:'30분', intensity:'최대심박수 50~60%', rest:'-', tip:'체지방 감소 — 대화가 가능한 강도 유지' },
+          { name:'스트레칭 및 쿨다운',   sets:'1세트', reps:'10분', intensity:'저강도',             rest:'-', tip:'운동 후 정적 스트레칭으로 마무리' },
+        ]},
+        { day: '전신 B (금) — 저강도 머신', exercises: [
+          { name: lm[0].name, sets:'2세트', reps:'15회', intensity: kg(lp1rm,55), rest:'90초', tip: lm[0].tip },
+          { name: bm[1].name, sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'60초', tip: bm[1].tip },
+          { name: lm[2].name, sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'60초', tip: lm[2].tip },
+          { name: co[1].name, sets:'2세트', reps:'15회', intensity:'체중',        rest:'45초', tip: co[1].tip },
+        ]},
+      ];
+    }
+
+    // 근육형: 근력 유지 위주, 유산소 최소화
+    if (pattern === 'muscular') {
+      const lm  = pick(DB.lowerMachine, 3, 0);
+      const cf  = pick(DB.chestFree,    2, 10);
+      const bf  = pick(DB.backFree,     2, 20);
+      const bm  = pick(DB.backMachine,  1, 30);
+      const sh  = pick(DB.shoulder,     2, 40);
+      const bi  = pick(DB.bicep,        1, 50);
+      const tri = pick(DB.tricep,       1, 60);
+      const co  = pick(DB.core,         2, 70);
+      // 레벨에 따라 세션 수 조정
+      if (lvIdx <= 1) {
+        return [
+          { day: '전신 A (월) — 근력 유지', exercises: [
+            { name:'파워 레그프레스 (머신)', sets:'4세트', reps:'8회',  intensity: kg(lp1rm,p),  rest:'120초', tip:'근육형 유지 — 고중량 저반복으로 근력 유지' },
+            { name: cf[0].name,            sets:'4세트', reps:'8회',  intensity: kg(bp1rm,p),  rest:'120초', tip: cf[0].tip },
+            { name: bf[0].name,            sets:'4세트', reps:'8회',  intensity:'중~고강도',   rest:'90초',  tip: bf[0].tip },
+            { name: sh[0].name,            sets:'3세트', reps:'10회', intensity:'중강도',       rest:'60초',  tip: sh[0].tip },
+            { name: co[0].name,            sets:'3세트', reps:'45초', intensity:'체중',         rest:'30초',  tip: co[0].tip },
+          ]},
+          { day: '전신 B (목) — 근력 유지', exercises: [
+            { name: lm[0].name,  sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),  rest:'90초',  tip: lm[0].tip },
+            { name: cf[1].name,  sets:'4세트', reps:'10회', intensity: kg(bp1rm,p),  rest:'90초',  tip: cf[1].tip },
+            { name: bm[0].name,  sets:'3세트', reps:'10회', intensity:'중강도',       rest:'60초',  tip: bm[0].tip },
+            { name: bi[0].name,  sets:'3세트', reps:'12회', intensity:'중강도',       rest:'45초',  tip: bi[0].tip },
+            { name: tri[0].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'45초',  tip: tri[0].tip },
+          ]},
+        ];
+      }
+      return [
+        { day: '하체 (월)', exercises: [
+          { name:'파워 레그프레스 (머신)', sets:'4세트', reps:'8회',  intensity: kg(lp1rm,p),      rest:'120초', tip:'근육형 유지 — 고중량' },
+          { name: lm[0].name,            sets:'3세트', reps:'10회', intensity:'중~고강도',         rest:'90초',  tip: lm[0].tip },
+          { name: lm[1].name,            sets:'3세트', reps:'10회', intensity:'중강도',            rest:'60초',  tip: lm[1].tip },
+          { name: co[0].name,            sets:'3세트', reps:'60초', intensity:'체중',              rest:'30초',  tip: co[0].tip },
+        ]},
+        { day: '상체 A (수) — 가슴·등', exercises: [
+          { name: cf[0].name, sets:'4세트', reps:'8회',  intensity: kg(bp1rm,p),  rest:'120초', tip: cf[0].tip },
+          { name: bf[0].name, sets:'4세트', reps:'8회',  intensity:'중~고강도',   rest:'90초',  tip: bf[0].tip },
+          { name: sh[0].name, sets:'3세트', reps:'10회', intensity:'중강도',       rest:'60초',  tip: sh[0].tip },
+          { name: bi[0].name, sets:'3세트', reps:'10회', intensity:'중강도',       rest:'45초',  tip: bi[0].tip },
+          { name: tri[0].name,sets:'3세트', reps:'10회', intensity:'중강도',       rest:'45초',  tip: tri[0].tip },
+        ]},
+        { day: '상체 B (금) — 어깨·팔', exercises: [
+          { name: cf[1].name,  sets:'4세트', reps:'10회', intensity:'중강도', rest:'90초',  tip: cf[1].tip },
+          { name: bf[1].name,  sets:'4세트', reps:'10회', intensity:'중강도', rest:'90초',  tip: bf[1].tip },
+          { name: sh[1].name,  sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초',  tip: sh[1].tip },
+          { name: bm[0].name,  sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초',  tip: bm[0].tip },
+          { name: co[1].name,  sets:'3세트', reps:'20회', intensity:'체중',   rest:'30초',  tip: co[1].tip },
+        ]},
+      ];
+    }
 
     if (lvIdx === 0) {
       // ══ LEVEL 1: 초급 — 전신 A/B (주 2회) ══
