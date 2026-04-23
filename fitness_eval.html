@@ -922,6 +922,7 @@ function buildPlanFromData(ev) {
   const hr     = parseInt(ev.hr) || 70;
   const stepHR = parseInt(ev.step) || 110;
   const pu     = parseInt(ev.pushup) || 0;
+  const bf     = parseFloat(ev.bf) || 0;
   const total  = parseInt(ev.totalScore) || 40;
   const lvIdx  = Math.min(Math.floor(total / 20.01), 4);
 
@@ -932,203 +933,1003 @@ function buildPlanFromData(ev) {
     return Math.round(hrRest + (hrMax - hrRest) * lo) + '~' + Math.round(hrRest + (hrMax - hrRest) * hi) + 'bpm';
   }
 
-  // ── 약점 파악 ──
-  const lRatio    = weight > 0 ? lp1rm / weight : 0;
-  const uRatio    = weight > 0 ? bp1rm / weight : 0;
-  const weakLower = gender==='남' ? lRatio < 1.8 : lRatio < 1.2;
-  const weakUpper = gender==='남' ? uRatio < 0.8 : uRatio < 0.5;
-  const weakCardio= stepHR > 115;
-  const weakEndur = gender==='남' ? pu < 17 : pu < 13;
+  // ══════════════════════════════════════════════════════════
+  // 약점 정밀 분석 (5개 항목 × 3단계 등급)
+  // ══════════════════════════════════════════════════════════
+  const lRatio = weight > 0 ? lp1rm / weight : 0;
+  const uRatio = weight > 0 ? bp1rm / weight : 0;
 
-  // ── 1RM → kg (2.5kg 단위 반올림) ──
+  // 각 항목 등급: 'strong' / 'normal' / 'weak'
+  function gradeLower(r, g) {
+    if(g==='남') return r>=2.2?'strong':r>=1.8?'normal':'weak';
+    return r>=1.6?'strong':r>=1.2?'normal':'weak';
+  }
+  function gradeUpper(r, g) {
+    if(g==='남') return r>=1.0?'strong':r>=0.8?'normal':'weak';
+    return r>=0.6?'strong':r>=0.5?'normal':'weak';
+  }
+  function gradeCardio(h) {
+    return h<=0?'normal': h<=100?'strong':h<=115?'normal':'weak';
+  }
+  function gradeEndur(p, g) {
+    if(g==='남') return p>=30?'strong':p>=17?'normal':'weak';
+    return p>=21?'strong':p>=13?'normal':'weak';
+  }
+  function gradeBF(b, g) {
+    if(g==='남') return b<=15?'normal':b<=20?'normal':'weak';
+    return b<=23?'normal':b<=28?'normal':'weak';
+  }
+
+  const gL = gradeLower(lRatio, gender);   // 하체 근력
+  const gU = gradeUpper(uRatio, gender);   // 상체 근력
+  const gC = gradeCardio(stepHR);          // 심폐
+  const gE = gradeEndur(pu, gender);       // 근지구력
+  const gB = gradeBF(bf, gender);          // 체지방
+
+  const weakLower  = gL === 'weak';
+  const weakUpper  = gU === 'weak';
+  const weakCardio = gC === 'weak';
+  const weakEndur  = gE === 'weak';
+  const strongLower= gL === 'strong';
+  const strongUpper= gU === 'strong';
+
+  // ── 패턴 분류 (주요 케이스) ──
+  // 패턴에 따라 스케줄·운동구성·유산소가 실제로 달라짐
+  let pattern = 'balanced'; // 기본: 균형
+  let patternLabel = '';
+  let patternNote = '';
+
+  if (weakLower && !weakUpper) {
+    pattern = 'weak_lower';
+    patternLabel = '🦵 하체 집중 강화 타입';
+    patternNote = '상체는 유지, 하체를 주 2회 이상 집중 훈련합니다.';
+  } else if (weakUpper && !weakLower) {
+    pattern = 'weak_upper';
+    patternLabel = '💪 상체 집중 강화 타입';
+    patternNote = '하체는 유지, 상체 밀기·당기기를 추가로 보강합니다.';
+  } else if (weakLower && weakUpper) {
+    pattern = 'weak_both';
+    patternLabel = '⚠️ 전신 근력 강화 타입';
+    patternNote = '상하체 모두 기초 근력이 필요합니다. 전신 운동으로 시작합니다.';
+  } else if (weakCardio && !weakLower && !weakUpper) {
+    pattern = 'weak_cardio';
+    patternLabel = '❤️ 심폐 집중 개선 타입';
+    patternNote = '근력은 좋으나 심폐 회복력이 낮습니다. 유산소 빈도·강도를 높입니다.';
+  } else if (weakEndur && !weakCardio && !weakLower) {
+    pattern = 'weak_endur';
+    patternLabel = '🔋 근지구력 강화 타입';
+    patternNote = '최대 근력은 있으나 지속력이 부족합니다. 고반복·서킷 방식을 적용합니다.';
+  } else if (weakCardio && weakEndur) {
+    pattern = 'weak_cardio_endur';
+    patternLabel = '🏃 심폐+지구력 복합 개선 타입';
+    patternNote = '심폐 기능과 근지구력을 동시에 개선합니다. 유산소 중심으로 설계합니다.';
+  } else if (strongLower && weakUpper) {
+    pattern = 'strong_lower_weak_upper';
+    patternLabel = '🦾 상체 불균형 교정 타입';
+    patternNote = '하체 근력은 우수하나 상체가 약합니다. 상체 볼륨을 집중 증가합니다.';
+  } else if (strongUpper && weakLower) {
+    pattern = 'strong_upper_weak_lower';
+    patternLabel = '🦵 하체 불균형 교정 타입';
+    patternNote = '상체 근력은 우수하나 하체가 약합니다. 하체 세션을 주 2회 이상 확보합니다.';
+  } else if (!weakLower && !weakUpper && weakCardio) {
+    pattern = 'strength_no_cardio';
+    patternLabel = '💪❤️ 근력 우수 / 심폐 보강 타입';
+    patternNote = '근력 훈련을 유지하면서 심폐 능력을 집중 개선합니다.';
+  } else {
+    pattern = 'balanced';
+    patternLabel = '✅ 균형 발전 타입';
+    patternNote = '전반적으로 균형 잡힌 체력입니다. 레벨에 맞게 전체적으로 강도를 높입니다.';
+  }
+
+  // ── 패턴별 유산소 처방 커스터마이징 ──
+  function getCardioRx() {
+    const base = {
+      frequency: '주 ' + cfg.cDays + '회',
+      type: cfg.cardioType,
+      zone: cfg.zone,
+      targetHR: cfg.zHR,
+      duration: cfg.cMin + '분',
+      structure: lvIdx <= 3
+        ? '준비운동 5분 → 본운동 ' + cfg.cMin + '분 → 정리운동 5분'
+        : '준비운동 5분 → 인터벌 (고강도 1분 + 저강도 1분 반복) ' + (cfg.cMin-10) + '분 → 정리 5분',
+      intensity_note: cfg.note
+    };
+    // 심폐 약점: 유산소 빈도+시간 증가, 인터벌 추가
+    if (pattern === 'weak_cardio' || pattern === 'weak_cardio_endur' || pattern === 'strength_no_cardio') {
+      return { ...base,
+        frequency: '주 ' + Math.min(cfg.cDays+1, 5) + '회 (심폐 집중)',
+        duration: (cfg.cMin+10) + '분',
+        type: '트레드밀 인터벌 또는 사이클 인터벌',
+        structure: '준비 5분 → 인터벌 (고강도 1분+저강도 1.5분) × ' + Math.round((cfg.cMin)/2.5) + '세트 → 정리 5분',
+        intensity_note: '심폐 회복력 향상이 우선 목표. 운동 후 1분 심박수를 매번 기록하세요.'
+      };
+    }
+    // 근지구력 약점: 서킷 유산소 추가
+    if (pattern === 'weak_endur') {
+      return { ...base,
+        type: cfg.cardioType + ' + 근지구력 서킷',
+        structure: '준비 5분 → 유산소 ' + Math.round(cfg.cMin*0.6) + '분 → 서킷(푸시업+스쿼트+플랭크 각 20회 × 3라운드) → 정리 5분',
+        intensity_note: '유산소 후 체중운동 서킷으로 근지구력을 함께 강화합니다.'
+      };
+    }
+    return base;
+  }
+
+  // ── 패턴별 스케줄 커스터마이징 ──
+  function getSchedule() {
+    const base = [
+      { '월':'웨이트','화':'유산소','수':'휴식','목':'웨이트','금':'유산소','토':'유산소','일':'휴식' },
+      { '월':'웨이트','화':'유산소','수':'웨이트','목':'유산소','금':'웨이트','토':'유산소','일':'휴식' },
+      { '월':'웨이트','화':'유산소','수':'웨이트','목':'유산소','금':'웨이트','토':'유산소','일':'휴식' },
+      { '월':'웨이트','화':'유산소','수':'웨이트','목':'웨이트','금':'유산소','토':'웨이트','일':'유산소' },
+      { '월':'웨이트','화':'유산소','수':'웨이트','목':'웨이트','금':'유산소','토':'웨이트','일':'유산소' },
+    ][lvIdx];
+
+    // 심폐 약점: 유산소 세션 1회 추가
+    if (pattern === 'weak_cardio' || pattern === 'strength_no_cardio') {
+      if(lvIdx <= 1) return { '월':'웨이트','화':'유산소','수':'유산소','목':'웨이트','금':'유산소','토':'유산소','일':'휴식' };
+      if(lvIdx === 2) return { '월':'웨이트','화':'유산소','수':'웨이트','목':'유산소','금':'웨이트','토':'유산소','일':'유산소' };
+    }
+    // 하체 약점 (주 4회): 하체 세션 추가
+    if ((pattern === 'weak_lower' || pattern === 'strong_upper_weak_lower') && lvIdx >= 3) {
+      return { '월':'하체','화':'상체','수':'유산소','목':'하체','금':'상체','토':'하체+코어','일':'휴식' };
+    }
+    // 상체 약점 (주 4회): 상체 세션 추가
+    if ((pattern === 'weak_upper' || pattern === 'strong_lower_weak_upper') && lvIdx >= 3) {
+      return { '월':'상체A','화':'하체','수':'유산소','목':'상체B','금':'하체','토':'상체+유산소','일':'휴식' };
+    }
+    return base;
+  }
+
+  // ── 패턴별 주의사항 ──
+  function getNotes() {
+    const list = [];
+    // 패턴별 핵심 메시지
+    list.push(patternNote);
+    // 약점별 구체적 처방
+    if (weakLower) list.push('하체 근력 강화: 파워 레그프레스 목표 중량 = 체중×' + (gender==='남'?'1.8':'1.2') + '배. 매주 2.5kg씩 증량을 목표로 하세요.');
+    if (weakUpper) list.push('상체 근력 강화: 벤치프레스 목표 중량 = 체중×' + (gender==='남'?'0.8':'0.5') + '배. 푸시업 보조 운동을 세션 마다 추가하세요.');
+    if (weakCardio) list.push('심폐 개선: 운동 직후 심박수와 1분 후 심박수를 기록하세요. 차이가 클수록 심폐 기능이 좋아지는 신호입니다.');
+    if (weakEndur) list.push('근지구력 개선: 세트 간 휴식을 60초 이내로 줄이고, 마지막 세트는 최대 반복까지 수행하세요.');
+    if (strongLower && weakUpper) list.push('하체와 상체 불균형이 있습니다. 상체 운동을 세션 초반(에너지 충분할 때)에 배치하세요.');
+    if (strongUpper && weakLower) list.push('상체와 하체 불균형이 있습니다. 하체 운동을 세션 초반에 배치하고 하체 세션을 주 2회 이상 확보하세요.');
+    // 공통
+    list.push('운동 전 5~10분 동적 스트레칭, 운동 후 5~10분 정적 스트레칭 필수.');
+    list.push('단백질: 체중 1kg당 1.6~2.0g (예: 70kg → 하루 112~140g).');
+    list.push('수면 7~8시간 확보 — 근육 회복의 70%는 수면 중 이루어집니다.');
+    list.push('통증(근육통 제외)이 느껴지면 즉시 중단하고 전문가 상담을 받으세요.');
+    return '• ' + list.join('\n• ');
+  }
+
+  // ── 1RM → kg ──
   function kg(rm, pct) {
     return rm > 0 ? Math.round(rm * pct / 100 / 2.5) * 2.5 + 'kg' : '가벼운 중량';
   }
 
-  // ── 레벨별 설정 (ACSM 2026: 초급 2-3일/주, 중급 3일/주, 고급 4-6일/주) ──
+  // ── 레벨별 설정 ──
   const cfg = [
-    // LEVEL 1 — 초급: 전신 주2회, 유산소 주3회, 1RM 60-70%
-    { wDays:2, cDays:3, cMin:20, pct:[60,65,65,70], split:'전신 운동 (주 2회)', cardioType:'실내 자전거 또는 걷기', zone:'존 1-2 (최대심박수 50-60%)', zHR:tHR(0.50,0.60), note:'대화가 편하게 가능한 강도' },
-    // LEVEL 2 — 초중급: 전신 주3회, 유산소 주3회, 1RM 65-75%
-    { wDays:3, cDays:3, cMin:25, pct:[65,68,72,75], split:'전신 운동 (주 3회)', cardioType:'트레드밀 속보 또는 자전거', zone:'존 2 (최대심박수 55-65%)', zHR:tHR(0.55,0.65), note:'대화가 가능하지만 약간 숨찬 강도' },
-    // LEVEL 3 — 중급: 상하체 분할 주3회, 유산소 주3회, 1RM 70-80%
-    { wDays:3, cDays:3, cMin:30, pct:[70,73,77,80], split:'상체/하체 분할 (주 3회)', cardioType:'트레드밀 또는 사이클', zone:'존 2-3 (최대심박수 60-70%)', zHR:tHR(0.60,0.70), note:'대화가 어려운 강도, 집중 유지' },
-    // LEVEL 4 — 중고급: 상하체 주4회, 유산소 주3회, 1RM 75-85%
-    { wDays:4, cDays:3, cMin:35, pct:[75,78,82,85], split:'상체/하체 분할 (주 4회)', cardioType:'트레드밀·사이클·로잉머신', zone:'존 3 (최대심박수 65-75%)', zHR:tHR(0.65,0.75), note:'고강도 유지, 심박수 모니터링' },
-    // LEVEL 5 — 고급: 분할 주4회, 유산소 주3회, 1RM 80-90%
+    { wDays:2, cDays:3, cMin:20, pct:[60,65,65,70], split:'전신 (주 2회)', cardioType:'실내 자전거 또는 걷기', zone:'존 1-2 (최대심박수 50-60%)', zHR:tHR(0.50,0.60), note:'대화가 편하게 가능한 강도' },
+    { wDays:3, cDays:3, cMin:25, pct:[65,68,72,75], split:'전신 (주 3회)', cardioType:'트레드밀 속보 또는 자전거', zone:'존 2 (최대심박수 55-65%)', zHR:tHR(0.55,0.65), note:'약간 숨차지만 대화 가능한 강도' },
+    { wDays:3, cDays:3, cMin:30, pct:[70,73,77,80], split:'상체/하체 분할 (주 3회)', cardioType:'트레드밀 또는 사이클', zone:'존 2-3 (최대심박수 60-70%)', zHR:tHR(0.60,0.70), note:'대화가 어려운 강도' },
+    { wDays:4, cDays:3, cMin:35, pct:[75,78,82,85], split:'상체/하체 분할 (주 4회)', cardioType:'트레드밀·사이클·로잉머신', zone:'존 3 (최대심박수 65-75%)', zHR:tHR(0.65,0.75), note:'고강도, 심박수 모니터링' },
     { wDays:4, cDays:3, cMin:40, pct:[80,83,87,90], split:'부위별 분할 (주 4회)', cardioType:'러닝 또는 인터벌 사이클', zone:'존 3-4 (최대심박수 70-80%)', zHR:tHR(0.70,0.80), note:'고강도 인터벌, 충분한 회복 필수' },
   ][lvIdx];
 
-  // ── 주간 스케줄 ──
-  const schedules = [
-    { '월':'웨이트','화':'유산소','수':'휴식','목':'웨이트','금':'유산소','토':'유산소','일':'휴식' },
-    { '월':'웨이트','화':'유산소','수':'웨이트','목':'유산소','금':'웨이트','토':'유산소','일':'휴식' },
-    { '월':'웨이트','화':'유산소','수':'웨이트','목':'유산소','금':'웨이트','토':'유산소','일':'휴식' },
-    { '월':'웨이트','화':'유산소','수':'웨이트','목':'웨이트','금':'유산소','토':'웨이트','일':'유산소' },
-    { '월':'웨이트','화':'유산소','수':'웨이트','목':'웨이트','금':'유산소','토':'웨이트','일':'유산소' },
-  ];
+  // ══════════════════════════════════════════════════════════
+  // 운동 DB (ACSM 2026 + NSCA 기준, 레벨별 확장)
+  // 원칙: 초급(L1-2) = 머신+체중/덤벨, 중급(L3) = 머신+프리웨이트, 상급(L4-5) = 프리웨이트 위주
+  // 시드값 기반 셔플로 매 회원마다 다른 조합 생성
+  // ══════════════════════════════════════════════════════════
+  const seed = Math.round((weight*7 + age*3 + lp1rm + bp1rm + pu) % 9999) || 1234;
+  function seededShuffle(arr, s) {
+    const a = [...arr]; let r = s;
+    for (let i = a.length-1; i>0; i--) { r=(r*9301+49297)%233280; const j=Math.floor(r/233280*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+    return a;
+  }
+  function pick(arr, n, offset=0) { return seededShuffle(arr, seed+offset).slice(0, Math.min(n, arr.length)); }
 
-  // ── 주차별 운동 프로그램 생성 함수 ──
-  // 원칙: 초급 = 머신(무게복합) + 프리웨이트(체중/횟수)
-  //       중급 = 머신 + 기본 프리웨이트 혼합
-  //       고급 = 기본 프리웨이트 위주 + 머신 보조
-  // 하체: 파워 레그프레스 + 핵 스쿼트 머신 사용
+  // ── 운동 DB: 부위별 ──
+  const DB = {
+    // 하체 머신
+    lowerMachine: [
+      { name:'파워 레그프레스 (머신)',      tip:'발 어깨너비, 무릎이 발끝 방향 유지, 허리 밀착' },
+      { name:'핵 스쿼트 (머신)',            tip:'등 기대어 무릎 방향 유지, 엉덩이 들리지 않게' },
+      { name:'파워 레그프레스 (발 높게)',   tip:'발 플랫폼 위쪽 → 둔근·햄스트링 자극 증가' },
+      { name:'레그컬 (머신)',               tip:'허벅지 뒤쪽 집중, 천천히 내리기 (3초 이완)' },
+      { name:'레그 익스텐션 (머신)',        tip:'무릎 완전히 펴기, 마지막 1초 버티기' },
+      { name:'힙 어덕션 (머신)',            tip:'내측 허벅지 집중, 천천히 되돌리기' },
+      { name:'힙 어브덕션 (머신)',          tip:'외측 허벅지·둔근 집중' },
+    ],
+    // 하체 프리웨이트
+    lowerFree: [
+      { name:'바벨 백 스쿼트',               tip:'발 어깨너비, 허벅지 평행까지, 무릎 발끝 방향' },
+      { name:'바벨 프런트 스쿼트',           tip:'팔꿈치 높게 유지, 상체 더 세우기' },
+      { name:'덤벨 스쿼트',                 tip:'가슴 앞 또는 옆에 덤벨, 자세 유지에 집중' },
+      { name:'덤벨 런지',                   tip:'앞발 무릎 90°, 뒷발 무릎 바닥 근처까지' },
+      { name:'원 레그 데드리프트',           tip:'지지발 무릎 살짝 구부리고, 허리 중립 유지하며 상체 숙이기' },
+      { name:'스플릿 스쿼트',               tip:'앞발 고정 후 뒷발 뒤로 뻗어 수직으로 내리기, 무릎 발끝 방향' },
+      { name:'불가리안 스쿼트',             tip:'뒷발 벤치에 올리고, 앞발 무릎 발끝 방향, 상체 세우기' },
+      { name:'힙 브리지',                   tip:'엉덩이 최대한 높이, 상단에서 1초 버티기' },
+      { name:'카프레이즈 (스탠딩)',          tip:'발끝으로 최대 높이, 천천히 내리기' },
+    ],
+    // 가슴 머신
+    chestMachine: [
+      { name:'체스트프레스 (머신)',                 tip:'등 밀착, 밀 때 숨 내쉬기, 완전 이완까지' },
+      { name:'인클라인 스미스 벤치프레스',          tip:'30~45° 인클라인, 스미스 바 윗가슴으로 내리기' },
+      { name:'체스트 플라이 (머신)',                tip:'가슴이 당기는 느낌, 팔꿈치 살짝 구부리기' },
+      { name:'케이블 크로스오버',                   tip:'가슴 중앙으로 모으며 수축, 팔꿈치 고정' },
+    ],
+    // 가슴 프리웨이트
+    chestFree: [
+      { name:'바벨 벤치프레스',            tip:'팔꿈치 45~75°, 가슴 중앙으로 내리기' },
+      { name:'덤벨 벤치프레스',            tip:'팔꿈치 45°, 가슴 중앙, 완전 스트레치' },
+      { name:'덤벨 인클라인 벤치프레스',  tip:'30~45° 인클라인, 윗가슴 집중' },
+      { name:'덤벨 플라이',               tip:'팔꿈치 살짝 구부리고 호 그리며 펼치기' },
+      { name:'푸시업',                    tip:'팔꿈치 45°, 가슴 끝까지 내리기, 완전 신전' },
+      { name:'딥스 (평행봉)',              tip:'상체 앞으로 살짝 기울여 가슴 집중' },
+    ],
+    // 등 머신
+    backMachine: [
+      { name:'랫풀다운 (머신)',            tip:'광배근 먼저 활성화, 쇄골 아래까지 당기기' },
+      { name:'시티드 로우 (머신)',         tip:'날개뼈 모으며 당기기, 상체 반동 최소화' },
+      { name:'케이블 로우',               tip:'팔꿈치 몸통 옆으로 당기기' },
+      { name:'케이블 풀오버',             tip:'팔꿈치 고정, 광배근으로 당기기' },
+    ],
+    // 등 프리웨이트
+    backFree: [
+      { name:'바벨 벤트오버 로우',         tip:'허리 곧게, 배꼽 쪽으로 당기기, 반동 금지' },
+      { name:'덤벨 벤트오버 로우',         tip:'한 손 벤치 지지, 팔꿈치 위로 당기기' },
+      { name:'덤벨 원암 로우',            tip:'벤치에 한 손 지지, 팔꿈치 높이 당기기' },
+      { name:'바벨 데드리프트',           tip:'발 어깨너비, 바 몸에 붙여 들기, 허리 중립' },
+      { name:'풀업 (턱걸이)',             tip:'광배근 사용 의식, 턱이 바 위로' },
+    ],
+    // 어깨
+    shoulder: [
+      { name:'숄더프레스 (머신)',          tip:'어깨 으쓱하지 않게, 완전 신전까지' },
+      { name:'덤벨 숄더프레스',           tip:'팔꿈치 90°에서 위로, 어깨 으쓱 금지' },
+      { name:'바벨 오버헤드프레스',       tip:'코어 긴장, 바 머리 앞으로 밀기' },
+      { name:'덤벨 사이드 레터럴 레이즈', tip:'팔꿈치 살짝 구부리고 어깨 높이까지' },
+      { name:'덤벨 프런트 레이즈',        tip:'팔꿈치 약간 구부리고 어깨 높이까지' },
+      { name:'덤벨 리어 델트 플라이',     tip:'상체 숙이고 팔꿈치 구부린 채 올리기' },
+      { name:'페이스풀 (케이블)',          tip:'팔꿈치 높게, 로프를 귀 옆으로' },
+    ],
+    // 이두
+    bicep: [
+      { name:'덤벨 컬',                   tip:'팔꿈치 고정, 완전 수축 후 천천히 내리기' },
+      { name:'바벨 컬',                   tip:'팔꿈치 앞으로 나오지 않게, 반동 금지' },
+      { name:'해머 컬',                   tip:'엄지 위, 팔뚝 외측 자극' },
+      { name:'케이블 컬',                 tip:'팔꿈치 고정, 완전 수축 확인' },
+      { name:'인클라인 덤벨 컬',          tip:'30~45° 인클라인, 이두 완전 스트레치' },
+      { name:'컨센트레이션 컬',           tip:'팔꿈치 무릎 안쪽 고정, 완전 수축' },
+    ],
+    // 삼두
+    tricep: [
+      { name:'케이블 푸시다운',            tip:'팔꿈치 옆구리에 고정, 완전히 펴기' },
+      { name:'오버헤드 덤벨 익스텐션',    tip:'팔꿈치 고정, 천천히 내리기' },
+      { name:'라잉 덤벨 익스텐션',        tip:'팔꿈치 고정, 이마 옆으로 내리기' },
+      { name:'딥스 (삼두 집중)',           tip:'상체 세우고, 팔꿈치 뒤로 구부리기' },
+      { name:'클로즈그립 벤치프레스',     tip:'손 어깨너비, 팔꿈치 몸통 가까이' },
+      { name:'킥백 (덤벨)',               tip:'팔꿈치 고정, 팔뚝만 뒤로 펴기' },
+    ],
+    // 코어
+    core: [
+      { name:'플랭크',                    tip:'엉덩이 들리지 않게, 코어 긴장 유지, 호흡' },
+      { name:'사이드 플랭크',             tip:'옆구리 집중, 엉덩이 처지지 않게' },
+      { name:'크런치',                    tip:'목 당기지 말고, 복부 힘으로만 올리기' },
+      { name:'레그 레이즈',               tip:'허리 바닥에 눌러, 다리 천천히 내리기' },
+      { name:'싯업',                      tip:'발 고정, 복부 힘으로 올라오기, 허리 과신전 주의' },
+      { name:'행잉 레그 레이즈',          tip:'철봉 매달려 다리 들기, 반동 없이 복부 힘으로' },
+      { name:'힙 브리지',                 tip:'엉덩이 최대 높이, 상단 1초 버티기' },
+      { name:'버드독',                    tip:'척추 중립 유지, 팔다리 반대편 뻗기' },
+      { name:'데드버그',                  tip:'허리 바닥 붙이고 팔다리 교차 뻗기' },
+    ],
+  };
+
+  // ══════════════════════════════════════════════════════════
+  // 패턴별 보강 세트 생성 헬퍼
+  // 각 패턴의 "핵심 보강 블록"을 세션에 주입
+  // ══════════════════════════════════════════════════════════
+
+  // 하체 보강 블록 (weak_lower / strong_upper_weak_lower)
+  function lowerBoostBlock(sets='3세트', reps='12회') {
+    return [
+      { name:'파워 레그프레스 (머신)', sets, reps, intensity: kg(lp1rm, 65), rest:'90초', tip:'하체 보강 — 무릎 발끝 방향, 완전 가동범위' },
+      { name:'레그컬 (머신)',          sets, reps, intensity:'중강도',         rest:'60초', tip:'하체 보강 — 햄스트링 천천히 내리기' },
+      { name:DB.lowerFree[3].name,    sets, reps:'15회', intensity:'체중',    rest:'45초', tip:DB.lowerFree[3].tip },
+    ];
+  }
+
+  // 상체 보강 블록 (weak_upper / strong_lower_weak_upper)
+  function upperBoostBlock(sets='3세트', reps='12회') {
+    return [
+      { name:'체스트프레스 (머신)',    sets, reps, intensity: kg(bp1rm, 65), rest:'90초', tip:'상체 보강 — 등 밀착, 완전 가동범위' },
+      { name:'랫풀다운 (머신)',        sets, reps, intensity:'중강도',        rest:'90초', tip:'상체 보강 — 광배근 활성화 후 당기기' },
+      { name:DB.chestFree[4].name,    sets, reps:'최대', intensity:'체중',   rest:'60초', tip:DB.chestFree[4].tip + ' — 매 세션 최대 횟수 도전' },
+    ];
+  }
+
+  // 심폐 보강 블록 (weak_cardio) — 세션 마무리에 추가
+  function cardioFinishBlock() {
+    return [
+      { name:'제자리 뛰기 (버피 변형)', sets:'2세트', reps:'30초', intensity:'고강도', rest:'60초', tip:'심폐 보강 — 최대한 빠르게, 30초 후 휴식' },
+      { name:'마운틴 클라이머',         sets:'2세트', reps:'30초', intensity:'고강도', rest:'60초', tip:'심폐+코어 — 팔꿈치 아래 고정, 빠르게' },
+    ];
+  }
+
+  // 근지구력 보강 블록 (weak_endur) — 고반복 서킷 추가
+  function endurBoostBlock() {
+    return [
+      { name:'푸시업',                  sets:'3세트', reps:'최대', intensity:'체중', rest:'30초', tip:'지구력 보강 — 완전 수행 불가 전까지 최대 반복' },
+      { name:'스쿼트 (체중)',           sets:'3세트', reps:'20회', intensity:'체중', rest:'30초', tip:'지구력 보강 — 빠른 속도로 연속 수행' },
+      { name:'플랭크',                  sets:'3세트', reps:'45초', intensity:'체중', rest:'30초', tip:'지구력 보강 — 코어 긴장 유지, 호흡 지속' },
+    ];
+  }
+
+  // 체지방 감량 보강 블록 (highBF) — 대근육 복합 추가
+  function fatLossBlock() {
+    return [
+      { name:'케틀벨 스윙 (덤벨 대체)', sets:'3세트', reps:'15회', intensity:'중강도', rest:'45초', tip:'체지방 감량 — 엉덩이 힘으로 밀어올리기, 유산소 효과' },
+      { name:'마운틴 클라이머',          sets:'3세트', reps:'30초', intensity:'체중',   rest:'30초', tip:'체지방 감량 — 심박수 올리기' },
+    ];
+  }
+
+  // 여성 하체·둔근 보강 블록
+  function femaleGluteBlock(sets='3세트') {
+    return [
+      { name:'힙 브리지',              sets, reps:'20회', intensity:'체중',  rest:'45초', tip:'둔근 보강 — 엉덩이 최대 높이, 상단 2초 버티기' },
+      { name:'힙 어브덕션 (머신)',     sets, reps:'15회', intensity:'중강도', rest:'45초', tip:'둔근 보강 — 외측 둔근 집중' },
+      { name:'불가리안 스쿼트',        sets, reps:'12회', intensity:'체중',  rest:'60초', tip:DB.lowerFree[6].tip },
+    ];
+  }
+
+  // ── 운동 프로그램 생성 (레벨 × 패턴 × 성별) ──
   function makeSessions(pct) {
     const p = pct;
+    const isFemale = gender === '여';
 
     if (lvIdx === 0) {
-      // ── LEVEL 1: 초급 전신 A/B (주 2회) ──
-      // 무게 복합 → 머신 / 체중·횟수 위주 → 프리웨이트(덤벨)
+      // ══ LEVEL 1: 초급 — 전신 A/B (주 2회) ══
+      // ACSM: 60-70% 1RM, 1-3세트, 8-15회, 주 2-3일
+      const lm  = pick(DB.lowerMachine, 3, 0);
+      const cm  = pick(DB.chestMachine, 1, 10);
+      const bm  = pick(DB.backMachine,  2, 20);
+      const sh  = pick(DB.shoulder,     1, 30);
+      const lf  = pick(DB.lowerFree,    2, 40);
+      const co  = pick(DB.core,         3, 50);
+
+      // 패턴별 A세션 주운동 조정
+      let sessionA_main = [
+        { name: lm[0].name, sets:'2세트', reps:'15회', intensity: kg(lp1rm,p),  rest:'90초', tip: lm[0].tip },
+        { name: cm[0].name, sets:'2세트', reps:'15회', intensity: kg(bp1rm,p),  rest:'90초', tip: cm[0].tip },
+        { name: bm[0].name, sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'60초', tip: bm[0].tip },
+        { name: lm[1].name, sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'60초', tip: lm[1].tip },
+        { name: bm[1].name, sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'60초', tip: bm[1].tip },
+      ];
+      let sessionB_main = [
+        { name: lf[0].name,              sets:'2세트', reps:'15회', intensity:'가벼운 덤벨', rest:'60초', tip: lf[0].tip },
+        { name: sh[0].name,              sets:'2세트', reps:'15회', intensity:'가벼운 덤벨', rest:'60초', tip: sh[0].tip },
+        { name: DB.backFree[1].name,     sets:'2세트', reps:'15회', intensity:'가벼운 덤벨', rest:'60초', tip: DB.backFree[1].tip },
+        { name: lf[1].name,              sets:'2세트', reps:'20회', intensity:'체중',         rest:'45초', tip: lf[1].tip },
+        { name: co[0].name,              sets:'2세트', reps:'20초', intensity:'체중',         rest:'45초', tip: co[0].tip },
+        { name: co[1].name,              sets:'2세트', reps:'15회', intensity:'체중',         rest:'45초', tip: co[1].tip },
+      ];
+
+      // 하체 약 → A세션에 하체 비중 증가
+      if (pattern === 'weak_lower' || pattern === 'strong_upper_weak_lower') {
+        sessionA_main = [
+          { name:'파워 레그프레스 (머신)', sets:'3세트', reps:'15회', intensity: kg(lp1rm,p),  rest:'90초', tip:'하체 집중 — 주 운동 세트 증가' },
+          { name: lm[2].name,            sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'60초', tip: lm[2].tip },
+          { name: DB.lowerFree[3].name,  sets:'2세트', reps:'15회', intensity:'체중',         rest:'45초', tip: DB.lowerFree[3].tip },
+          { name: bm[0].name,            sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'60초', tip: bm[0].tip },
+          { name: co[0].name,            sets:'2세트', reps:'20초', intensity:'체중',         rest:'45초', tip: co[0].tip },
+        ];
+      }
+      // 상체 약 → B세션에 상체 보강
+      if (pattern === 'weak_upper' || pattern === 'strong_lower_weak_upper') {
+        sessionB_main = [
+          { name: cm[0].name,            sets:'3세트', reps:'15회', intensity: kg(bp1rm,p),  rest:'90초', tip:'상체 집중 — 세트 증가' },
+          { name: bm[0].name,            sets:'3세트', reps:'15회', intensity:'가벼운 중량', rest:'90초', tip: bm[0].tip },
+          { name: DB.chestFree[4].name,  sets:'2세트', reps:'최대', intensity:'체중',         rest:'60초', tip:'매 세션 최대 반복 — 상체 강화 지표' },
+          { name: sh[0].name,            sets:'2세트', reps:'15회', intensity:'가벼운 덤벨', rest:'45초', tip: sh[0].tip },
+          { name: co[0].name,            sets:'2세트', reps:'20초', intensity:'체중',         rest:'30초', tip: co[0].tip },
+        ];
+      }
+      // 여성 → B세션에 둔근 추가
+      if (isFemale) {
+        sessionB_main = [...sessionB_main.slice(0,3), ...femaleGluteBlock('2세트')];
+      }
+      // 심폐 약 → 각 세션 마무리에 심폐 블록
+      if (weakCardio) {
+        sessionA_main = [...sessionA_main, ...cardioFinishBlock()];
+      }
+      // 근지구력 약 → B세션에 지구력 블록
+      if (weakEndur) {
+        sessionB_main = [...sessionB_main.slice(0,3), ...endurBoostBlock()];
+      }
+
       return [
-        {
-          day: '전신 A (월) — 머신 위주',
-          exercises: [
-            { name:'파워 레그프레스 (머신)',   sets:'2세트', reps:'15회', intensity: kg(lp1rm,p),   rest:'90초',  tip:'발 어깨너비, 무릎이 발끝 방향으로 유지' },
-            { name:'체스트프레스 (머신)',      sets:'2세트', reps:'15회', intensity: kg(bp1rm,p),   rest:'90초',  tip:'등받이에 등 밀착, 밀 때 숨 내쉬기' },
-            { name:'랫풀다운 (머신)',          sets:'2세트', reps:'15회', intensity:'가벼운 중량',  rest:'60초',  tip:'바를 쇄골 아래까지 당기기' },
-            { name:'레그컬 (머신)',            sets:'2세트', reps:'15회', intensity:'가벼운 중량',  rest:'60초',  tip:'허벅지 뒤쪽 집중, 천천히 내리기' },
-            { name:'시티드 로우 (머신)',       sets:'2세트', reps:'15회', intensity:'가벼운 중량',  rest:'60초',  tip:'허리 세우고 날개뼈 모으기' },
-          ]
-        },
-        {
-          day: '전신 B (목) — 프리웨이트(체중/덤벨)',
-          exercises: [
-            { name:'덤벨 스쿼트',             sets:'2세트', reps:'15회', intensity:'가벼운 덤벨',  rest:'60초',  tip:'발 어깨너비, 무릎이 발끝 넘지 않게' },
-            { name:'덤벨 숄더프레스',          sets:'2세트', reps:'15회', intensity:'가벼운 덤벨',  rest:'60초',  tip:'팔꿈치 90°에서 위로 쭉 펴기' },
-            { name:'덤벨 벤트오버 로우',       sets:'2세트', reps:'15회', intensity:'가벼운 덤벨',  rest:'60초',  tip:'허리 곧게 유지, 팔꿈치 위로 당기기' },
-            { name:'힙 브리지',               sets:'2세트', reps:'20회', intensity:'체중',         rest:'45초',  tip:'엉덩이 최대한 높이 들어올리기' },
-            { name:'플랭크',                  sets:'2세트', reps:'20초', intensity:'체중',         rest:'45초',  tip:'엉덩이가 올라가거나 처지지 않게' },
-            { name:'크런치',                  sets:'2세트', reps:'15회', intensity:'체중',         rest:'45초',  tip:'목 당기지 말고 복부 힘으로만' },
-          ]
-        }
+        { day: '전신 A (월) — 머신 기초' + (weakLower?' [하체 집중]':weakUpper?' [상체 집중]':''), exercises: sessionA_main },
+        { day: '전신 B (목) — 프리웨이트' + (isFemale?' [둔근 보강]':weakEndur?' [지구력 서킷]':''), exercises: sessionB_main }
       ];
 
     } else if (lvIdx === 1) {
-      // ── LEVEL 2: 초중급 전신 A/B/C (주 3회) ──
-      // A/C = 머신 위주(복합 무게) / B = 프리웨이트(덤벨) 혼합
+      // ══ LEVEL 2: 초중급 — 전신 A/B/C (주 3회) ══
+      const lm  = pick(DB.lowerMachine, 4, 0);
+      const cm  = pick(DB.chestMachine, 2, 10);
+      const bm  = pick(DB.backMachine,  2, 20);
+      const cf  = pick(DB.chestFree,    2, 30);
+      const bf  = pick(DB.backFree,     1, 40);
+      const sh  = pick(DB.shoulder,     2, 50);
+      const bi  = pick(DB.bicep,        1, 60);
+      const co  = pick(DB.core,         2, 70);
+
+      // 패턴: 하체 약 → A·C 하체 볼륨 증가, B 상체 유지
+      if (pattern === 'weak_lower' || pattern === 'strong_upper_weak_lower') {
+        return [
+          { day: '하체 A (월) — 하체 집중', exercises: [
+            { name:'파워 레그프레스 (머신)', sets:'4세트', reps:'12회', intensity: kg(lp1rm,p), rest:'90초', tip:'하체 집중 강화 — 주 운동' },
+            { name: lm[1].name,            sets:'3세트', reps:'12회', intensity:'중강도',       rest:'90초', tip: lm[1].tip },
+            { name: lm[2].name,            sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: lm[2].tip },
+            { name: DB.lowerFree[3].name,  sets:'3세트', reps:'12회', intensity:'체중',         rest:'45초', tip: DB.lowerFree[3].tip },
+            { name: co[0].name,            sets:'2세트', reps:'30초', intensity:'체중',         rest:'30초', tip: co[0].tip },
+          ]},
+          { day: '상체 (수) — 유지', exercises: [
+            { name: cm[0].name, sets:'3세트', reps:'12회', intensity: kg(bp1rm,p),  rest:'90초', tip: cm[0].tip },
+            { name: bm[0].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'90초', tip: bm[0].tip },
+            { name: sh[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨', rest:'60초', tip: sh[0].tip },
+            { name: bi[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨', rest:'45초', tip: bi[0].tip },
+            { name: co[1].name, sets:'2세트', reps:'15회', intensity:'체중',         rest:'30초', tip: co[1].tip },
+          ]},
+          { day: '하체 B (금) — 하체 볼륨', exercises: [
+            { name:'핵 스쿼트 (머신)',       sets:'3세트', reps:'12회', intensity:'중강도',       rest:'90초', tip: DB.lowerMachine[1].tip },
+            { name: lm[3].name,             sets:'3세트', reps:'15회', intensity:'중강도',       rest:'60초', tip: lm[3].tip },
+            ...( isFemale ? femaleGluteBlock('3세트') : [
+              { name: DB.lowerFree[3].name, sets:'3세트', reps:'12회', intensity:'체중', rest:'45초', tip: DB.lowerFree[3].tip },
+              { name: DB.lowerFree[7].name, sets:'3세트', reps:'20회', intensity:'체중', rest:'30초', tip: DB.lowerFree[7].tip },
+            ]),
+            { name: co[0].name,             sets:'2세트', reps:'30초', intensity:'체중', rest:'30초', tip: co[0].tip },
+          ]},
+        ];
+      }
+
+      // 패턴: 상체 약 → B 상체 볼륨 증가, A·C 하체 유지
+      if (pattern === 'weak_upper' || pattern === 'strong_lower_weak_upper') {
+        return [
+          { day: '전신 A (월) — 하체 + 상체 기초', exercises: [
+            { name: lm[0].name, sets:'3세트', reps:'12회', intensity: kg(lp1rm,p),  rest:'90초', tip: lm[0].tip },
+            { name: lm[1].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: lm[1].tip },
+            { name: cm[0].name, sets:'3세트', reps:'12회', intensity: kg(bp1rm,p),  rest:'90초', tip: cm[0].tip },
+            { name: bm[0].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'90초', tip: bm[0].tip },
+            { name: co[0].name, sets:'2세트', reps:'30초', intensity:'체중',         rest:'30초', tip: co[0].tip },
+          ]},
+          { day: '상체 집중 (수)', exercises: [
+            { name: cm[1].name,           sets:'4세트', reps:'10회', intensity: kg(bp1rm,p),   rest:'90초', tip:'상체 집중 — 주 운동 세트 증가' },
+            { name: bm[1].name,           sets:'4세트', reps:'10회', intensity:'중강도',        rest:'90초', tip: bm[1].tip },
+            { name: cf[0].name,           sets:'3세트', reps:'12회', intensity:'중강도 덤벨',   rest:'60초', tip: cf[0].tip },
+            { name: bf[0].name,           sets:'3세트', reps:'12회', intensity:'중강도 덤벨',   rest:'60초', tip: bf[0].tip },
+            { name: DB.chestFree[4].name, sets:'3세트', reps:'최대', intensity:'체중',           rest:'60초', tip:'매 세션 최대 반복 — 상체 강화 지표' },
+            { name: sh[0].name,           sets:'3세트', reps:'12회', intensity:'중강도 덤벨',   rest:'45초', tip: sh[0].tip },
+          ]},
+          { day: '전신 C (금) — 상체 + 하체 마무리', exercises: [
+            { name: cm[0].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: cm[0].tip },
+            { name: bm[0].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: bm[0].tip },
+            { name: lm[2].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'90초', tip: lm[2].tip },
+            { name: bi[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'45초', tip: bi[0].tip },
+            { name: co[1].name, sets:'3세트', reps:'15회', intensity:'체중',         rest:'30초', tip: co[1].tip },
+          ]},
+        ];
+      }
+
+      // 패턴: 심폐 약 → 각 세션 마무리 심폐 블록
+      if (pattern === 'weak_cardio' || pattern === 'strength_no_cardio') {
+        return [
+          { day: '전신 A (월)', exercises: [
+            { name: lm[0].name, sets:'3세트', reps:'12회', intensity: kg(lp1rm,p),  rest:'90초', tip: lm[0].tip },
+            { name: cm[0].name, sets:'3세트', reps:'12회', intensity: kg(bp1rm,p),  rest:'90초', tip: cm[0].tip },
+            { name: bm[0].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: bm[0].tip },
+            ...cardioFinishBlock(),
+          ]},
+          { day: '전신 B (수) + 심폐', exercises: [
+            { name: cf[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'60초', tip: cf[0].tip },
+            { name: bf[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'60초', tip: bf[0].tip },
+            { name: lm[2].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: lm[2].tip },
+            ...cardioFinishBlock(),
+          ]},
+          { day: '전신 C (금) + 심폐', exercises: [
+            { name: lm[0].name, sets:'3세트', reps:'10회', intensity: kg(lp1rm,p+5),rest:'90초', tip: lm[0].tip },
+            { name: cm[1].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: cm[1].tip },
+            { name: bm[1].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: bm[1].tip },
+            ...cardioFinishBlock(),
+          ]},
+        ];
+      }
+
+      // 패턴: 근지구력 약 → 고반복 서킷 추가
+      if (pattern === 'weak_endur' || pattern === 'weak_cardio_endur') {
+        return [
+          { day: '전신 A (월)', exercises: [
+            { name: lm[0].name, sets:'3세트', reps:'12회', intensity: kg(lp1rm,p),  rest:'90초', tip: lm[0].tip },
+            { name: cm[0].name, sets:'3세트', reps:'12회', intensity: kg(bp1rm,p),  rest:'90초', tip: cm[0].tip },
+            { name: bm[0].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: bm[0].tip },
+            { name: co[0].name, sets:'2세트', reps:'30초', intensity:'체중',         rest:'30초', tip: co[0].tip },
+          ]},
+          { day: '전신 B (수) — 서킷 중심', exercises: [
+            ...endurBoostBlock(),
+            { name: lm[1].name, sets:'2세트', reps:'15회', intensity:'중강도', rest:'45초', tip: lm[1].tip },
+            { name: bm[0].name, sets:'2세트', reps:'15회', intensity:'중강도', rest:'45초', tip: bm[0].tip },
+          ]},
+          { day: '전신 C (금)', exercises: [
+            { name: lm[0].name, sets:'3세트', reps:'10회', intensity: kg(lp1rm,p+5),rest:'90초', tip: lm[0].tip },
+            { name: cm[1].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: cm[1].tip },
+            { name: bm[1].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: bm[1].tip },
+            ...endurBoostBlock(),
+          ]},
+        ];
+      }
+
+      // 여성 기본 → 하체A/상체/하체B
+      if (isFemale && pattern === 'balanced') {
+        return [
+          { day: '하체 A (월) — 전면', exercises: [
+            { name:'파워 레그프레스 (머신)', sets:'3세트', reps:'12회', intensity: kg(lp1rm,p), rest:'90초', tip: DB.lowerMachine[0].tip },
+            { name: lm[1].name,            sets:'3세트', reps:'12회', intensity:'중강도',       rest:'90초', tip: lm[1].tip },
+            { name: lm[4].name,            sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초', tip: lm[4].tip },
+            { name: DB.lowerFree[3].name,  sets:'3세트', reps:'12회', intensity:'체중',         rest:'45초', tip: DB.lowerFree[3].tip },
+            { name: co[0].name,            sets:'2세트', reps:'30초', intensity:'체중',         rest:'30초', tip: co[0].tip },
+          ]},
+          { day: '상체 (수)', exercises: [
+            { name: cm[0].name, sets:'3세트', reps:'12회', intensity: kg(bp1rm,p),  rest:'90초', tip: cm[0].tip },
+            { name: bm[0].name, sets:'3세트', reps:'12회', intensity:'중강도',       rest:'90초', tip: bm[0].tip },
+            { name: sh[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨', rest:'60초', tip: sh[0].tip },
+            { name: bi[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨', rest:'45초', tip: bi[0].tip },
+            { name: co[1].name, sets:'2세트', reps:'15회', intensity:'체중',         rest:'30초', tip: co[1].tip },
+          ]},
+          { day: '하체 B (금) — 후면·둔근', exercises: [
+            ...femaleGluteBlock('3세트'),
+            { name: lm[3].name, sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초', tip: lm[3].tip },
+            { name: co[0].name, sets:'2세트', reps:'30초', intensity:'체중',   rest:'30초', tip: co[0].tip },
+          ]},
+        ];
+      }
+
+      // 기본 (balanced, 남성)
       return [
-        {
-          day: '전신 A (월) — 머신',
-          exercises: [
-            { name:'파워 레그프레스 (머신)',   sets:'3세트', reps:'12회', intensity: kg(lp1rm,p),   rest:'90초',  tip:'발 위치 중간, 속도 일정하게' },
-            { name:'핵 스쿼트 (머신)',         sets:'3세트', reps:'12회', intensity:'가벼운 중량',  rest:'90초',  tip:'등 기대어 무릎 방향 유지' },
-            { name:'체스트프레스 (머신)',      sets:'3세트', reps:'12회', intensity: kg(bp1rm,p),   rest:'90초',  tip:'호흡: 밀 때 내쉬기' },
-            { name:'랫풀다운 (머신)',          sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'광배근 먼저 활성화' },
-            { name:'레그컬 (머신)',            sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'천천히 내리기' },
-          ]
-        },
-        {
-          day: '전신 B (수) — 덤벨 프리웨이트',
-          exercises: [
-            { name:'덤벨 스쿼트',             sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'60초',  tip:'가슴 앞에 덤벨 들고 앉기' },
-            { name:'덤벨 벤치프레스',         sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'60초',  tip:'팔꿈치 45°, 가슴에서 밀기' },
-            { name:'덤벨 숄더프레스',         sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'60초',  tip:'팔꿈치 90°에서 위로 밀기' },
-            { name:'덤벨 벤트오버 로우',      sets:'3세트', reps:'12회', intensity:'중강도 덤벨',  rest:'60초',  tip:'등 곧게, 배꼽 쪽으로 당기기' },
-            { name:'힙 브리지',              sets:'3세트', reps:'20회', intensity:'체중',          rest:'45초',  tip:'엉덩이 최대한 높이 들기' },
-            { name:'플랭크',                 sets:'3세트', reps:'30초', intensity:'체중',          rest:'45초',  tip:'코어에 힘 유지' },
-          ]
-        },
-        {
-          day: '전신 C (금) — 머신 + 덤벨 혼합',
-          exercises: [
-            { name:'파워 레그프레스 (머신)',   sets:'3세트', reps:'10회', intensity: kg(lp1rm,p+5), rest:'90초',  tip:'이번 주 최고 중량 도전' },
-            { name:'체스트프레스 (머신)',      sets:'3세트', reps:'10회', intensity: kg(bp1rm,p+5), rest:'90초',  tip:'컨트롤하며 천천히' },
-            { name:'시티드 로우 (머신)',       sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'등 하부 광배근 집중' },
-            { name:'레그 익스텐션 (머신)',     sets:'3세트', reps:'15회', intensity:'중강도',       rest:'60초',  tip:'무릎 완전히 펴기' },
-            { name:'덤벨 사이드 레터럴 레이즈', sets:'3세트', reps:'15회', intensity:'가벼운 덤벨', rest:'45초', tip:'팔꿈치 살짝 구부리고 올리기' },
-            { name:'크런치',                  sets:'3세트', reps:'20회', intensity:'체중',         rest:'30초',  tip:'호흡 내쉬며 복부 수축' },
-          ]
-        }
+        { day: '전신 A (월) — 머신 중심', exercises: [
+          { name: lm[0].name, sets:'3세트', reps:'12회', intensity: kg(lp1rm,p),   rest:'90초', tip: lm[0].tip },
+          { name: lm[1].name, sets:'3세트', reps:'12회', intensity:'중강도',        rest:'90초', tip: lm[1].tip },
+          { name: cm[0].name, sets:'3세트', reps:'12회', intensity: kg(bp1rm,p),   rest:'90초', tip: cm[0].tip },
+          { name: bm[0].name, sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초', tip: bm[0].tip },
+          { name: lm[2].name, sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초', tip: lm[2].tip },
+          { name: co[0].name, sets:'3세트', reps:'30초', intensity:'체중',          rest:'45초', tip: co[0].tip },
+        ]},
+        { day: '전신 B (수) — 덤벨 프리웨이트', exercises: [
+          { name: cf[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨',   rest:'60초', tip: cf[0].tip },
+          { name: sh[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨',   rest:'60초', tip: sh[0].tip },
+          { name: bf[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨',   rest:'60초', tip: bf[0].tip },
+          { name: lm[3].name, sets:'3세트', reps:'15회', intensity:'중강도',        rest:'60초', tip: lm[3].tip },
+          { name: bi[0].name, sets:'3세트', reps:'12회', intensity:'중강도 덤벨',   rest:'45초', tip: bi[0].tip },
+          { name: co[1].name, sets:'3세트', reps:'15회', intensity:'체중',          rest:'45초', tip: co[1].tip },
+        ]},
+        { day: '전신 C (금) — 혼합', exercises: [
+          { name: lm[0].name, sets:'3세트', reps:'10회', intensity: kg(lp1rm,p+5), rest:'90초', tip: lm[0].tip + ' (최고 중량)' },
+          { name: cm[1].name, sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초', tip: cm[1].tip },
+          { name: bm[1].name, sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초', tip: bm[1].tip },
+          { name: sh[1].name, sets:'3세트', reps:'15회', intensity:'가벼운 덤벨',   rest:'45초', tip: sh[1].tip },
+          { name: cf[1].name, sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초', tip: cf[1].tip },
+          { name: co[0].name, sets:'3세트', reps:'40초', intensity:'체중',          rest:'30초', tip: co[0].tip },
+        ]},
       ];
 
     } else if (lvIdx === 2) {
-      // ── LEVEL 3: 중급 상체/하체 분할 (주 3회) ──
-      // 하체 = 파워레그프레스 + 핵스쿼트 + 머신
-      // 상체 = 머신 + 기본 프리웨이트(덤벨벤치, 덤벨로우) 혼합
+      // ══ LEVEL 3: 중급 — 상체/하체/전신 분할 (주 3회) ══
+      // NSCA: 70-85% 1RM, 3-4세트, 6-12회, DUP 적용
+      // 머신 + 프리웨이트 혼합, 약점 보강 포함
+      const lm  = pick(DB.lowerMachine, 4, 0);
+      const cf  = pick(DB.chestFree,    2, 10);
+      const cm  = pick(DB.chestMachine, 1, 20);
+      const bm  = pick(DB.backMachine,  2, 30);
+      const bf  = pick(DB.backFree,     2, 40);
+      const sh  = pick(DB.shoulder,     2, 50);
+      const bi  = pick(DB.bicep,        1, 60);
+      const tri = pick(DB.tricep,       1, 70);
+      const co  = pick(DB.core,         2, 80);
       return [
         {
-          day: '하체 (월) — 머신 위주',
+          day: '하체 (월) — 머신 + 프리웨이트',
           exercises: [
-            { name:'파워 레그프레스 (머신)',   sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),   rest:'90초',  tip:'발 어깨너비, 엉덩이 들리지 않게' },
-            { name:'핵 스쿼트 (머신)',         sets:'3세트', reps:'10회', intensity:'중강도',       rest:'90초',  tip:'등 밀착, 무릎 발끝 방향 유지' },
-            { name:'레그컬 (머신)',            sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'허리 들뜨지 않게' },
-            { name:'레그 익스텐션 (머신)',     sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'마지막 동작 1초 버티기' },
-            { name:'카프레이즈 (스탠딩)',      sets:'3세트', reps:'20회', intensity:'체중',         rest:'30초',  tip:'최대한 높이, 천천히 내리기' },
-            ...(weakLower ? [{ name:'✅ 보강: 파워 레그프레스 추가', sets:'2세트', reps:'15회', intensity: kg(lp1rm,p-10), rest:'60초', tip:'가벼운 중량으로 근지구력 강화' }] : []),
+            { name:'파워 레그프레스 (머신)',  sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),   rest:'90초',  tip: DB.lowerMachine[0].tip },
+            { name:'핵 스쿼트 (머신)',        sets:'3세트', reps:'10회', intensity:'중강도',        rest:'90초',  tip: DB.lowerMachine[1].tip },
+            { name: lm[2].name,              sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초',  tip: lm[2].tip },
+            { name: lm[3].name,              sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초',  tip: lm[3].tip },
+            { name:'카프레이즈 (스탠딩)',     sets:'3세트', reps:'20회', intensity:'체중',          rest:'30초',  tip: DB.lowerFree[8].tip },
+            ...(weakLower ? [{ name:'✅ 하체보강: ' + DB.lowerFree[0].name, sets:'2세트', reps:'15회', intensity: kg(lp1rm,p-10), rest:'60초', tip: DB.lowerFree[0].tip }] : []),
           ]
         },
         {
-          day: '상체 (수) — 머신 + 덤벨 혼합',
+          day: '상체 (수) — 머신 + 프리웨이트',
           exercises: [
-            { name:'덤벨 벤치프레스',         sets:'4세트', reps:'10회', intensity: kg(bp1rm,p),   rest:'90초',  tip:'팔꿈치 45°, 가슴 중앙에 집중' },
-            { name:'랫풀다운 (머신)',          sets:'4세트', reps:'10회', intensity:'중강도',       rest:'90초',  tip:'광배근 먼저 사용, 상체 살짝 뒤로' },
-            { name:'체스트프레스 (머신)',      sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'보조 운동으로 볼륨 추가' },
-            { name:'시티드 로우 (머신)',       sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'날개뼈 모으기' },
-            { name:'덤벨 숄더프레스',         sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'어깨 올라가지 않게' },
-            { name:'덤벨 컬',                 sets:'3세트', reps:'12회', intensity:'중강도',       rest:'45초',  tip:'팔꿈치 고정, 천천히 내리기' },
-            ...(weakUpper ? [{ name:'✅ 보강: 푸시업', sets:'3세트', reps:'최대', intensity:'체중', rest:'60초', tip:'팔꿈치 45°, 가슴 끝까지 내리기' }] : []),
+            { name: cf[0].name,  sets:'4세트', reps:'10회', intensity: kg(bp1rm,p),   rest:'90초',  tip: cf[0].tip },
+            { name: bm[0].name,  sets:'4세트', reps:'10회', intensity:'중강도',        rest:'90초',  tip: bm[0].tip },
+            { name: cm[0].name,  sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초',  tip: cm[0].tip },
+            { name: bm[1].name,  sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초',  tip: bm[1].tip },
+            { name: sh[0].name,  sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초',  tip: sh[0].tip },
+            { name: bi[0].name,  sets:'3세트', reps:'12회', intensity:'중강도',        rest:'45초',  tip: bi[0].tip },
+            ...(weakUpper ? [{ name:'✅ 상체보강: ' + DB.chestFree[4].name, sets:'3세트', reps:'최대', intensity:'체중', rest:'60초', tip: DB.chestFree[4].tip }] : []),
           ]
         },
         {
-          day: '전신 (금) — 머신 + 프리웨이트 혼합',
+          day: '전신 (금) — 볼륨 + 약점',
           exercises: [
-            { name:'핵 스쿼트 (머신)',         sets:'3세트', reps:'12회', intensity:'중강도',       rest:'90초',  tip:'볼륨 위주, 자세 집중' },
-            { name:'파워 레그프레스 (머신)',   sets:'3세트', reps:'12회', intensity: kg(lp1rm,p-5), rest:'90초',  tip:'중량 낮추고 횟수 확보' },
-            { name:'덤벨 벤트오버 로우',      sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'허리 곧게, 등 전체 수축' },
-            { name:'체스트 플라이 (머신)',     sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip:'가슴이 당기는 느낌 집중' },
-            { name:'플랭크',                  sets:'3세트', reps:'45초', intensity:'체중',         rest:'30초',  tip:'호흡 유지하며 버티기' },
+            { name:'파워 레그프레스 (머신)',  sets:'3세트', reps:'12회', intensity: kg(lp1rm,p-5), rest:'90초',  tip:'볼륨 위주, 속도 일정하게' },
+            { name: bf[0].name,             sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초',  tip: bf[0].tip },
+            { name: sh[1].name,             sets:'3세트', reps:'15회', intensity:'가벼운 덤벨',   rest:'45초',  tip: sh[1].tip },
+            { name: tri[0].name,            sets:'3세트', reps:'12회', intensity:'중강도',        rest:'45초',  tip: tri[0].tip },
+            { name: co[0].name,             sets:'3세트', reps:'45초', intensity:'체중',          rest:'30초',  tip: co[0].tip },
+            { name: co[1].name,             sets:'3세트', reps:'15회', intensity:'체중',          rest:'30초',  tip: co[1].tip },
           ]
         },
       ];
 
-    } else {
-      // ── LEVEL 4-5: 고급 상하체 4분할 (주 4회) ──
-      // 기본 프리웨이트 위주 + 머신 보조
-      // 하체: 파워 레그프레스 + 핵 스쿼트
+    } else if (lvIdx === 2) {
+      // ══ LEVEL 3: 중급 — 분할 (주 3회) ══
+      const lm  = pick(DB.lowerMachine, 4, 0);
+      const cf  = pick(DB.chestFree,    2, 10);
+      const cm  = pick(DB.chestMachine, 1, 20);
+      const bm  = pick(DB.backMachine,  2, 30);
+      const bf  = pick(DB.backFree,     2, 40);
+      const sh  = pick(DB.shoulder,     2, 50);
+      const bi  = pick(DB.bicep,        1, 60);
+      const tri = pick(DB.tricep,       1, 70);
+      const co  = pick(DB.core,         2, 80);
+
+      if (pattern === 'weak_lower' || pattern === 'strong_upper_weak_lower') {
+        return [
+          { day: '하체 A (월) — 집중 강화', exercises: [
+            { name:'파워 레그프레스 (머신)', sets:'5세트', reps:'10회', intensity: kg(lp1rm,p), rest:'90초', tip:'하체 집중 — 주 2회 훈련' },
+            { name:'핵 스쿼트 (머신)',       sets:'4세트', reps:'10회', intensity:'중강도',      rest:'90초', tip: DB.lowerMachine[1].tip },
+            { name: lm[2].name,            sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초', tip: lm[2].tip },
+            { name: DB.lowerFree[3].name,  sets:'3세트', reps:'12회', intensity:'체중',        rest:'45초', tip: DB.lowerFree[3].tip },
+            { name: co[0].name,            sets:'3세트', reps:'45초', intensity:'체중',        rest:'30초', tip: co[0].tip },
+          ]},
+          { day: '상체 (수)', exercises: [
+            { name: cf[0].name, sets:'4세트', reps:'10회', intensity: kg(bp1rm,p), rest:'90초', tip: cf[0].tip },
+            { name: bm[0].name, sets:'4세트', reps:'10회', intensity:'중강도',      rest:'90초', tip: bm[0].tip },
+            { name: sh[0].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초', tip: sh[0].tip },
+            { name: bi[0].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초', tip: bi[0].tip },
+            { name: tri[0].name,sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초', tip: tri[0].tip },
+          ]},
+          { day: '하체 B (금) — 볼륨', exercises: [
+            { name:'파워 레그프레스 (발 높게)', sets:'4세트', reps:'12회', intensity: kg(lp1rm,p-10), rest:'90초', tip: DB.lowerMachine[2].tip },
+            { name: lm[3].name,               sets:'3세트', reps:'12회', intensity:'중강도',          rest:'60초', tip: lm[3].tip },
+            ...(isFemale ? femaleGluteBlock('3세트') : [
+              { name: DB.lowerFree[3].name, sets:'3세트', reps:'12회', intensity:'체중', rest:'45초', tip: DB.lowerFree[3].tip },
+              { name: DB.lowerFree[7].name, sets:'3세트', reps:'20회', intensity:'체중', rest:'30초', tip: DB.lowerFree[7].tip },
+            ]),
+            { name: co[0].name, sets:'3세트', reps:'45초', intensity:'체중', rest:'30초', tip: co[0].tip },
+          ]},
+        ];
+      }
+      if (pattern === 'weak_upper' || pattern === 'strong_lower_weak_upper') {
+        return [
+          { day: '상체 A (월) — 집중 강화', exercises: [
+            { name: cf[0].name,           sets:'5세트', reps:'8회',  intensity: kg(bp1rm,p),  rest:'120초', tip:'상체 집중 — 고볼륨' },
+            { name: bm[0].name,           sets:'5세트', reps:'8회',  intensity:'중~고강도',   rest:'120초', tip: bm[0].tip },
+            { name: cm[0].name,           sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip: cm[0].tip },
+            { name: bm[1].name,           sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip: bm[1].tip },
+            { name: DB.chestFree[4].name, sets:'3세트', reps:'최대', intensity:'체중',          rest:'60초',  tip:'최대 반복 기록' },
+          ]},
+          { day: '하체 (수)', exercises: [
+            { name:'파워 레그프레스 (머신)', sets:'4세트', reps:'10회', intensity: kg(lp1rm,p), rest:'90초', tip: DB.lowerMachine[0].tip },
+            { name:'핵 스쿼트 (머신)',       sets:'3세트', reps:'10회', intensity:'중강도',      rest:'90초', tip: DB.lowerMachine[1].tip },
+            { name: lm[2].name,            sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초', tip: lm[2].tip },
+            { name: DB.lowerFree[3].name,  sets:'3세트', reps:'12회', intensity:'체중',        rest:'45초', tip: DB.lowerFree[3].tip },
+            { name: co[0].name,            sets:'3세트', reps:'45초', intensity:'체중',        rest:'30초', tip: co[0].tip },
+          ]},
+          { day: '상체 B (금) — 볼륨', exercises: [
+            { name: cf[1].name,           sets:'4세트', reps:'10회', intensity: kg(bp1rm,p),  rest:'90초',  tip: cf[1].tip },
+            { name: bf[0].name,           sets:'4세트', reps:'10회', intensity:'중강도',       rest:'90초',  tip: bf[0].tip },
+            { name: sh[0].name,           sets:'3세트', reps:'12회', intensity:'중강도',       rest:'60초',  tip: sh[0].tip },
+            { name: bi[0].name,           sets:'3세트', reps:'12회', intensity:'중강도',       rest:'45초',  tip: bi[0].tip },
+            { name: tri[0].name,          sets:'3세트', reps:'12회', intensity:'중강도',       rest:'45초',  tip: tri[0].tip },
+            { name: DB.chestFree[4].name, sets:'2세트', reps:'최대', intensity:'체중',          rest:'60초',  tip:'마무리 최대 반복' },
+          ]},
+        ];
+      }
+      if (pattern === 'weak_cardio' || pattern === 'strength_no_cardio') {
+        return [
+          { day: '하체 (월)', exercises: [
+            { name:'파워 레그프레스 (머신)', sets:'4세트', reps:'10회', intensity: kg(lp1rm,p), rest:'90초', tip: DB.lowerMachine[0].tip },
+            { name:'핵 스쿼트 (머신)',       sets:'3세트', reps:'10회', intensity:'중강도',      rest:'90초', tip: DB.lowerMachine[1].tip },
+            { name: lm[2].name,            sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초', tip: lm[2].tip },
+            ...cardioFinishBlock(),
+          ]},
+          { day: '상체 (수)', exercises: [
+            { name: cf[0].name, sets:'4세트', reps:'10회', intensity: kg(bp1rm,p), rest:'90초', tip: cf[0].tip },
+            { name: bm[0].name, sets:'4세트', reps:'10회', intensity:'중강도',      rest:'90초', tip: bm[0].tip },
+            { name: sh[0].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초', tip: sh[0].tip },
+            { name: bi[0].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초', tip: bi[0].tip },
+            ...cardioFinishBlock(),
+          ]},
+          { day: '전신 (금)', exercises: [
+            { name:'파워 레그프레스 (머신)', sets:'3세트', reps:'12회', intensity: kg(lp1rm,p-5), rest:'90초', tip:'볼륨 위주' },
+            { name: bf[0].name,            sets:'3세트', reps:'12회', intensity:'중강도',         rest:'60초', tip: bf[0].tip },
+            { name: co[0].name,            sets:'3세트', reps:'45초', intensity:'체중',           rest:'30초', tip: co[0].tip },
+            ...cardioFinishBlock(),
+          ]},
+        ];
+      }
+      if (pattern === 'weak_endur' || pattern === 'weak_cardio_endur') {
+        return [
+          { day: '하체 (월)', exercises: [
+            { name:'파워 레그프레스 (머신)', sets:'4세트', reps:'12회', intensity: kg(lp1rm,p), rest:'90초', tip: DB.lowerMachine[0].tip },
+            { name: lm[1].name,            sets:'3세트', reps:'15회', intensity:'중강도',       rest:'45초', tip: lm[1].tip + ' (짧은 휴식)' },
+            { name: co[0].name,            sets:'3세트', reps:'45초', intensity:'체중',         rest:'30초', tip: co[0].tip },
+          ]},
+          { day: '지구력 서킷 (수)', exercises: [
+            ...endurBoostBlock(),
+            { name: cm[0].name, sets:'3세트', reps:'15회', intensity:'중강도', rest:'45초', tip: cm[0].tip },
+            { name: bm[0].name, sets:'3세트', reps:'15회', intensity:'중강도', rest:'45초', tip: bm[0].tip },
+          ]},
+          { day: '상체 + 지구력 (금)', exercises: [
+            { name: cf[0].name, sets:'4세트', reps:'10회', intensity: kg(bp1rm,p), rest:'90초', tip: cf[0].tip },
+            { name: bm[0].name, sets:'4세트', reps:'10회', intensity:'중강도',      rest:'90초', tip: bm[0].tip },
+            { name: sh[0].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초', tip: sh[0].tip },
+            ...endurBoostBlock(),
+          ]},
+        ];
+      }
+      if (isFemale && pattern === 'balanced') {
+        return [
+          { day: '하체 A (월) — 전면', exercises: [
+            { name:'파워 레그프레스 (머신)', sets:'4세트', reps:'10회', intensity: kg(lp1rm,p), rest:'90초', tip: DB.lowerMachine[0].tip },
+            { name:'핵 스쿼트 (머신)',       sets:'3세트', reps:'10회', intensity:'중강도',      rest:'90초', tip: DB.lowerMachine[1].tip },
+            { name: lm[2].name,            sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초', tip: lm[2].tip },
+            { name: DB.lowerFree[3].name,  sets:'3세트', reps:'12회', intensity:'체중',        rest:'45초', tip: DB.lowerFree[3].tip },
+            { name:'카프레이즈 (스탠딩)',   sets:'3세트', reps:'20회', intensity:'체중',        rest:'30초', tip: DB.lowerFree[8].tip },
+          ]},
+          { day: '상체 (수)', exercises: [
+            { name: cf[0].name, sets:'4세트', reps:'10회', intensity: kg(bp1rm,p), rest:'90초', tip: cf[0].tip },
+            { name: bm[0].name, sets:'4세트', reps:'10회', intensity:'중강도',      rest:'90초', tip: bm[0].tip },
+            { name: sh[0].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초', tip: sh[0].tip },
+            { name: bi[0].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초', tip: bi[0].tip },
+            { name: co[0].name, sets:'3세트', reps:'45초', intensity:'체중',        rest:'30초', tip: co[0].tip },
+          ]},
+          { day: '하체 B (금) — 후면·둔근', exercises: [
+            ...femaleGluteBlock('4세트'),
+            { name: lm[3].name, sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초', tip: lm[3].tip },
+            { name: co[1].name, sets:'3세트', reps:'15회', intensity:'체중',   rest:'30초', tip: co[1].tip },
+          ]},
+        ];
+      }
+      // 기본 (balanced, 남성)
       return [
-        {
-          day: '하체 A (월) — 프리웨이트 + 머신',
-          exercises: [
-            { name:'바벨 스쿼트',             sets:'4세트', reps:'8회',  intensity:'중~고강도',    rest:'120초', tip:'발 어깨너비, 허벅지 평행까지 앉기' },
-            { name:'파워 레그프레스 (머신)',   sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),  rest:'90초',  tip:'고중량, 천천히 내리기 (3초)' },
-            { name:'레그컬 (머신)',            sets:'3세트', reps:'10회', intensity:'고강도',      rest:'60초',  tip:'완전히 수축 후 천천히 이완' },
-            { name:'카프레이즈 (스탠딩)',      sets:'4세트', reps:'15회', intensity:'중강도',      rest:'45초',  tip:'발뒤꿈치 완전히 내리기' },
-            ...(weakLower ? [{ name:'✅ 보강: 핵 스쿼트 (머신)', sets:'3세트', reps:'15회', intensity:'중강도', rest:'60초', tip:'가벼운 중량으로 대퇴사두 집중' }] : []),
-          ]
-        },
-        {
-          day: '상체 A (수) — 프리웨이트 위주',
-          exercises: [
-            { name:'바벨 벤치프레스',         sets:'4세트', reps:'8회',  intensity: kg(bp1rm,p),  rest:'120초', tip:'팔꿈치 45~75°, 가슴 중앙에 집중' },
-            { name:'바벨 벤트오버 로우',      sets:'4세트', reps:'8회',  intensity:'중~고강도',   rest:'90초',  tip:'허리 곧게, 배꼽 쪽으로 당기기' },
-            { name:'덤벨 숄더프레스',         sets:'3세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip:'어깨 으쓱하지 않게' },
-            { name:'랫풀다운 (머신)',          sets:'3세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip:'광배근 완전 수축 확인' },
-            { name:'덤벨 컬',                 sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초',  tip:'팔꿈치 고정, 천천히 내리기' },
-            { name:'케이블 푸시다운',          sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초',  tip:'팔꿈치 옆구리 고정' },
-            ...(weakUpper ? [{ name:'✅ 보강: 체스트 플라이 (머신)', sets:'2세트', reps:'15회', intensity:'가벼운 중량', rest:'45초', tip:'가슴 스트레칭 느끼기' }] : []),
-          ]
-        },
-        {
-          day: '하체 B (목) — 머신 위주',
-          exercises: [
-            { name:'핵 스쿼트 (머신)',         sets:'4세트', reps:'10회', intensity:'중~고강도',   rest:'90초',  tip:'발 위치 다양하게 시도 (근육 자극 변화)' },
-            { name:'파워 레그프레스 (발 높게)', sets:'3세트', reps:'12회', intensity: kg(lp1rm,p-10), rest:'90초', tip:'발 높게 두어 둔근 자극 강화' },
-            { name:'레그컬 (머신)',            sets:'4세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip:'햄스트링 완전 수축' },
-            { name:'레그 익스텐션 (머신)',     sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초',  tip:'마지막 회 1초 버티기' },
-            { name:'플랭크',                  sets:'3세트', reps:'60초', intensity:'체중',        rest:'30초',  tip:'코어 긴장 유지, 호흡 지속' },
-          ]
-        },
-        {
-          day: '상체 B (토) — 프리웨이트 + 머신 혼합',
-          exercises: [
-            { name:'덤벨 인클라인 벤치프레스', sets:'4세트', reps:'10회', intensity:'중강도',     rest:'90초',  tip:'30~45° 인클라인, 윗가슴 집중' },
-            { name:'바벨 벤트오버 로우',       sets:'4세트', reps:'10회', intensity:'중강도',     rest:'90초',  tip:'오버그립으로 상부 등 집중' },
-            { name:'덤벨 사이드 레터럴 레이즈', sets:'3세트', reps:'15회', intensity:'가벼운 덤벨', rest:'45초', tip:'팔꿈치 살짝 구부리고 어깨 높이까지' },
-            { name:'시티드 로우 (머신)',        sets:'3세트', reps:'12회', intensity:'중강도',     rest:'60초',  tip:'등 하부 광배근 집중' },
-            { name:'덤벨 컬',                  sets:'3세트', reps:'12회', intensity:'중강도',     rest:'45초',  tip:'천천히 내리기 (이완 집중)' },
-            { name:'케이블 푸시다운',           sets:'3세트', reps:'12회', intensity:'중강도',     rest:'45초',  tip:'팔꿈치 완전히 펴기' },
-          ]
-        },
+        { day: '하체 (월)', exercises: [
+          { name:'파워 레그프레스 (머신)', sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),   rest:'90초', tip: DB.lowerMachine[0].tip },
+          { name:'핵 스쿼트 (머신)',       sets:'3세트', reps:'10회', intensity:'중강도',        rest:'90초', tip: DB.lowerMachine[1].tip },
+          { name: lm[2].name,            sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초', tip: lm[2].tip },
+          { name: lm[3].name,            sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초', tip: lm[3].tip },
+          { name:'카프레이즈 (스탠딩)',   sets:'3세트', reps:'20회', intensity:'체중',          rest:'30초', tip: DB.lowerFree[8].tip },
+        ]},
+        { day: '상체 (수)', exercises: [
+          { name: cf[0].name, sets:'4세트', reps:'10회', intensity: kg(bp1rm,p), rest:'90초', tip: cf[0].tip },
+          { name: bm[0].name, sets:'4세트', reps:'10회', intensity:'중강도',      rest:'90초', tip: bm[0].tip },
+          { name: cm[0].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초', tip: cm[0].tip },
+          { name: bm[1].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초', tip: bm[1].tip },
+          { name: sh[0].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'60초', tip: sh[0].tip },
+          { name: bi[0].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초', tip: bi[0].tip },
+        ]},
+        { day: '전신 (금)', exercises: [
+          { name:'파워 레그프레스 (머신)', sets:'3세트', reps:'12회', intensity: kg(lp1rm,p-5), rest:'90초', tip:'볼륨 위주' },
+          { name: bf[0].name,            sets:'3세트', reps:'12회', intensity:'중강도',         rest:'60초', tip: bf[0].tip },
+          { name: sh[1].name,            sets:'3세트', reps:'15회', intensity:'가벼운 덤벨',    rest:'45초', tip: sh[1].tip },
+          { name: tri[0].name,           sets:'3세트', reps:'12회', intensity:'중강도',         rest:'45초', tip: tri[0].tip },
+          { name: co[0].name,            sets:'3세트', reps:'45초', intensity:'체중',           rest:'30초', tip: co[0].tip },
+          { name: co[1].name,            sets:'3세트', reps:'15회', intensity:'체중',           rest:'30초', tip: co[1].tip },
+        ]},
+      ];
+
+    } else {
+      // ══ LEVEL 4-5: 상급 — 4분할 (주 4회) ══
+      const cf  = pick(DB.chestFree,    3, 0);
+      const bf  = pick(DB.backFree,     3, 10);
+      const bm  = pick(DB.backMachine,  1, 20);
+      const sh  = pick(DB.shoulder,     3, 30);
+      const bi  = pick(DB.bicep,        2, 40);
+      const tri = pick(DB.tricep,       2, 50);
+      const lm  = pick(DB.lowerMachine, 3, 60);
+      const co  = pick(DB.core,         2, 70);
+
+      // 패턴: 하체 약 → 하체 주 3회
+      if (pattern === 'weak_lower' || pattern === 'strong_upper_weak_lower') {
+        return [
+          { day: '하체 A (월) — 전면 집중', exercises: [
+            { name:'바벨 백 스쿼트',           sets:'5세트', reps:'6회',  intensity:'고강도 (RPE 8)', rest:'150초', tip: DB.lowerFree[0].tip },
+            { name:'파워 레그프레스 (머신)',    sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),    rest:'90초',  tip:'하체 집중 강화' },
+            { name: lm[1].name,               sets:'3세트', reps:'12회', intensity:'중강도',         rest:'60초',  tip: lm[1].tip },
+            { name: DB.lowerFree[3].name,     sets:'3세트', reps:'12회', intensity:'체중',           rest:'45초',  tip: DB.lowerFree[3].tip },
+            { name:'카프레이즈 (스탠딩)',       sets:'4세트', reps:'15회', intensity:'중강도',         rest:'45초',  tip: DB.lowerFree[8].tip },
+          ]},
+          { day: '상체 (화)', exercises: [
+            { name: cf[0].name, sets:'4세트', reps:'8회',  intensity: kg(bp1rm,p),  rest:'120초', tip: cf[0].tip },
+            { name: bf[0].name, sets:'4세트', reps:'8회',  intensity:'중~고강도',   rest:'90초',  tip: bf[0].tip },
+            { name: sh[0].name, sets:'3세트', reps:'10회', intensity:'중강도',       rest:'60초',  tip: sh[0].tip },
+            { name: bi[0].name, sets:'3세트', reps:'10회', intensity:'중강도',       rest:'45초',  tip: bi[0].tip },
+            { name: tri[0].name,sets:'3세트', reps:'10회', intensity:'중강도',       rest:'45초',  tip: tri[0].tip },
+          ]},
+          { day: '하체 B (목) — 후면', exercises: [
+            { name:'핵 스쿼트 (머신)',          sets:'4세트', reps:'10회', intensity:'중~고강도', rest:'90초', tip: DB.lowerMachine[1].tip },
+            { name:'파워 레그프레스 (발 높게)', sets:'3세트', reps:'12회', intensity: kg(lp1rm,p-10), rest:'90초', tip: DB.lowerMachine[2].tip },
+            { name: lm[2].name,               sets:'4세트', reps:'10회', intensity:'중강도',    rest:'60초', tip: lm[2].tip },
+            ...(isFemale ? femaleGluteBlock('3세트') : [
+              { name: DB.lowerFree[3].name, sets:'3세트', reps:'12회', intensity:'체중', rest:'45초', tip: DB.lowerFree[3].tip },
+              { name: DB.lowerFree[4].name, sets:'3세트', reps:'10회', intensity:'중강도', rest:'60초', tip: DB.lowerFree[4].tip },
+            ]),
+          ]},
+          { day: '하체 C + 코어 (토)', exercises: [
+            { name:'파워 레그프레스 (머신)',    sets:'3세트', reps:'15회', intensity: kg(lp1rm,p-15), rest:'60초', tip:'지구력 세트 — 가벼운 중량 고반복' },
+            { name: DB.lowerFree[5].name,     sets:'3세트', reps:'12회', intensity:'체중',           rest:'45초', tip: DB.lowerFree[5].tip },
+            { name: co[0].name,               sets:'4세트', reps:'60초', intensity:'체중',           rest:'30초', tip: co[0].tip },
+            { name: co[1].name,               sets:'3세트', reps:'20회', intensity:'체중',           rest:'30초', tip: co[1].tip },
+          ]},
+        ];
+      }
+
+      // 패턴: 상체 약 → 상체 주 3회
+      if (pattern === 'weak_upper' || pattern === 'strong_lower_weak_upper') {
+        return [
+          { day: '상체 A (월) — 가슴·등 집중', exercises: [
+            { name: cf[0].name,           sets:'5세트', reps:'6회',  intensity: kg(bp1rm,p),  rest:'150초', tip:'상체 집중 강화' },
+            { name: bf[0].name,           sets:'5세트', reps:'6회',  intensity:'고강도',       rest:'150초', tip: bf[0].tip },
+            { name: cf[1].name,           sets:'3세트', reps:'10회', intensity:'중강도',       rest:'60초',  tip: cf[1].tip },
+            { name: bm[0].name,           sets:'3세트', reps:'10회', intensity:'중강도',       rest:'60초',  tip: bm[0].tip },
+            { name: DB.chestFree[4].name, sets:'3세트', reps:'최대', intensity:'체중',          rest:'60초',  tip:'최대 반복 기록' },
+          ]},
+          { day: '하체 (화)', exercises: [
+            { name:'바벨 백 스쿼트',           sets:'4세트', reps:'8회',  intensity:'중~고강도', rest:'120초', tip: DB.lowerFree[0].tip },
+            { name:'파워 레그프레스 (머신)',    sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),rest:'90초',  tip: DB.lowerMachine[0].tip },
+            { name: lm[1].name,               sets:'3세트', reps:'10회', intensity:'중강도',    rest:'60초',  tip: lm[1].tip },
+            { name:'카프레이즈 (스탠딩)',       sets:'4세트', reps:'15회', intensity:'중강도',    rest:'45초',  tip: DB.lowerFree[8].tip },
+            { name: co[0].name,               sets:'3세트', reps:'60초', intensity:'체중',      rest:'30초',  tip: co[0].tip },
+          ]},
+          { day: '상체 B (목) — 어깨·팔', exercises: [
+            { name: sh[0].name,  sets:'4세트', reps:'8회',  intensity:'중~고강도', rest:'90초',  tip: sh[0].tip },
+            { name: sh[1].name,  sets:'3세트', reps:'12회', intensity:'중강도',    rest:'60초',  tip: sh[1].tip },
+            { name: bi[0].name,  sets:'4세트', reps:'10회', intensity:'중강도',    rest:'45초',  tip: bi[0].tip },
+            { name: tri[0].name, sets:'4세트', reps:'10회', intensity:'중강도',    rest:'45초',  tip: tri[0].tip },
+            { name: bi[1].name,  sets:'3세트', reps:'12회', intensity:'중강도',    rest:'45초',  tip: bi[1].tip },
+          ]},
+          { day: '상체 C + 하체 (토)', exercises: [
+            { name: cf[2].name,  sets:'4세트', reps:'10회', intensity:'중강도',       rest:'90초',  tip: cf[2].tip },
+            { name: bf[1].name,  sets:'4세트', reps:'10회', intensity:'중강도',       rest:'90초',  tip: bf[1].tip },
+            { name:'파워 레그프레스 (머신)',sets:'3세트', reps:'12회', intensity: kg(lp1rm,p-10), rest:'90초', tip:'보조 하체' },
+            { name: co[1].name,  sets:'3세트', reps:'20회', intensity:'체중',          rest:'30초',  tip: co[1].tip },
+          ]},
+        ];
+      }
+
+      // 패턴: 심폐 약
+      if (pattern === 'weak_cardio' || pattern === 'strength_no_cardio') {
+        return [
+          { day: '하체 A (월)', exercises: [
+            { name:'바벨 백 스쿼트',        sets:'4세트', reps:'8회',  intensity:'중~고강도', rest:'120초', tip: DB.lowerFree[0].tip },
+            { name:'파워 레그프레스 (머신)',sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),rest:'90초',  tip: DB.lowerMachine[0].tip },
+            { name: lm[1].name,           sets:'3세트', reps:'10회', intensity:'중강도',    rest:'60초',  tip: lm[1].tip },
+            ...cardioFinishBlock(),
+          ]},
+          { day: '상체 A (화)', exercises: [
+            { name: cf[0].name, sets:'4세트', reps:'8회',  intensity: kg(bp1rm,p), rest:'120초', tip: cf[0].tip },
+            { name: bf[0].name, sets:'4세트', reps:'8회',  intensity:'중~고강도',  rest:'90초',  tip: bf[0].tip },
+            { name: sh[0].name, sets:'3세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip: sh[0].tip },
+            ...cardioFinishBlock(),
+          ]},
+          { day: '하체 B (목)', exercises: [
+            { name:'핵 스쿼트 (머신)',      sets:'4세트', reps:'10회', intensity:'중~고강도', rest:'90초', tip: DB.lowerMachine[1].tip },
+            { name: lm[2].name,           sets:'3세트', reps:'12회', intensity:'중강도',    rest:'60초', tip: lm[2].tip },
+            { name: co[0].name,           sets:'3세트', reps:'60초', intensity:'체중',      rest:'30초', tip: co[0].tip },
+            ...cardioFinishBlock(),
+          ]},
+          { day: '상체 B (토)', exercises: [
+            { name: cf[1].name,  sets:'4세트', reps:'10회', intensity:'중강도', rest:'90초',  tip: cf[1].tip },
+            { name: bf[1].name,  sets:'4세트', reps:'10회', intensity:'중강도', rest:'90초',  tip: bf[1].tip },
+            { name: sh[1].name,  sets:'3세트', reps:'15회', intensity:'중강도', rest:'45초',  tip: sh[1].tip },
+            { name: bi[0].name,  sets:'3세트', reps:'12회', intensity:'중강도', rest:'45초',  tip: bi[0].tip },
+            ...cardioFinishBlock(),
+          ]},
+        ];
+      }
+
+      // 패턴: 근지구력 약
+      if (pattern === 'weak_endur' || pattern === 'weak_cardio_endur') {
+        return [
+          { day: '하체 A (월)', exercises: [
+            { name:'바벨 백 스쿼트',        sets:'4세트', reps:'8회',  intensity:'중~고강도', rest:'120초', tip: DB.lowerFree[0].tip },
+            { name:'파워 레그프레스 (머신)',sets:'3세트', reps:'15회', intensity: kg(lp1rm,p-10), rest:'45초', tip:'짧은 휴식 — 지구력 강화' },
+            { name: co[0].name,           sets:'3세트', reps:'60초', intensity:'체중',      rest:'30초',  tip: co[0].tip },
+          ]},
+          { day: '상체 A + 지구력 (화)', exercises: [
+            { name: cf[0].name, sets:'4세트', reps:'8회',  intensity: kg(bp1rm,p), rest:'120초', tip: cf[0].tip },
+            { name: bf[0].name, sets:'4세트', reps:'8회',  intensity:'중~고강도',  rest:'90초',  tip: bf[0].tip },
+            ...endurBoostBlock(),
+          ]},
+          { day: '하체 B + 지구력 (목)', exercises: [
+            { name:'핵 스쿼트 (머신)',      sets:'4세트', reps:'10회', intensity:'중~고강도', rest:'90초', tip: DB.lowerMachine[1].tip },
+            { name: lm[2].name,           sets:'3세트', reps:'15회', intensity:'중강도',    rest:'45초', tip: lm[2].tip + ' (짧은 휴식)' },
+            ...endurBoostBlock(),
+          ]},
+          { day: '상체 B (토)', exercises: [
+            { name: cf[1].name,  sets:'4세트', reps:'10회', intensity:'중강도', rest:'90초',  tip: cf[1].tip },
+            { name: bf[1].name,  sets:'4세트', reps:'10회', intensity:'중강도', rest:'90초',  tip: bf[1].tip },
+            { name: sh[0].name,  sets:'3세트', reps:'12회', intensity:'중강도', rest:'60초',  tip: sh[0].tip },
+            { name: bi[0].name,  sets:'3세트', reps:'12회', intensity:'중강도', rest:'45초',  tip: bi[0].tip },
+            { name: tri[0].name, sets:'3세트', reps:'12회', intensity:'중강도', rest:'45초',  tip: tri[0].tip },
+          ]},
+        ];
+      }
+
+      // 여성 상급 (하체 주 3회)
+      if (isFemale && (pattern === 'balanced' || pattern === 'weak_both')) {
+        return [
+          { day: '하체 A (월) — 전면', exercises: [
+            { name:'바벨 백 스쿼트',        sets:'4세트', reps:'8회',  intensity:'중~고강도', rest:'120초', tip: DB.lowerFree[0].tip },
+            { name:'파워 레그프레스 (머신)',sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),rest:'90초',  tip: DB.lowerMachine[0].tip },
+            { name: lm[1].name,           sets:'3세트', reps:'12회', intensity:'중강도',    rest:'60초',  tip: lm[1].tip },
+            { name: DB.lowerFree[3].name, sets:'3세트', reps:'12회', intensity:'체중',      rest:'45초',  tip: DB.lowerFree[3].tip },
+            { name:'카프레이즈 (스탠딩)', sets:'4세트', reps:'15회', intensity:'중강도',    rest:'45초',  tip: DB.lowerFree[8].tip },
+          ]},
+          { day: '상체 A (화)', exercises: [
+            { name: cf[0].name, sets:'4세트', reps:'8회',  intensity: kg(bp1rm,p), rest:'120초', tip: cf[0].tip },
+            { name: bf[0].name, sets:'4세트', reps:'8회',  intensity:'중~고강도',  rest:'90초',  tip: bf[0].tip },
+            { name: sh[0].name, sets:'3세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip: sh[0].tip },
+            { name: bi[0].name, sets:'3세트', reps:'10회', intensity:'중강도',      rest:'45초',  tip: bi[0].tip },
+            { name: co[0].name, sets:'3세트', reps:'60초', intensity:'체중',        rest:'30초',  tip: co[0].tip },
+          ]},
+          { day: '하체 B (목) — 후면·둔근', exercises: [
+            ...femaleGluteBlock('4세트'),
+            { name: lm[2].name, sets:'4세트', reps:'10회', intensity:'중강도', rest:'60초', tip: lm[2].tip },
+            { name: DB.lowerFree[4].name, sets:'3세트', reps:'10회', intensity:'중강도', rest:'60초', tip: DB.lowerFree[4].tip },
+          ]},
+          { day: '상체 B + 코어 (토)', exercises: [
+            { name: cf[1].name,  sets:'4세트', reps:'10회', intensity:'중강도', rest:'90초',  tip: cf[1].tip },
+            { name: bf[1].name,  sets:'4세트', reps:'10회', intensity:'중강도', rest:'90초',  tip: bf[1].tip },
+            { name: sh[1].name,  sets:'3세트', reps:'15회', intensity:'중강도', rest:'45초',  tip: sh[1].tip },
+            { name: co[0].name,  sets:'3세트', reps:'60초', intensity:'체중',   rest:'30초',  tip: co[0].tip },
+            { name: co[1].name,  sets:'3세트', reps:'20회', intensity:'체중',   rest:'30초',  tip: co[1].tip },
+          ]},
+        ];
+      }
+
+      // 기본 (balanced, 남성)
+      return [
+        { day: '하체 A (월) — 프리웨이트 + 머신', exercises: [
+          { name:'바벨 백 스쿼트',           sets:'4세트', reps:'8회',  intensity:'중~고강도 (RPE 8)', rest:'120초', tip: DB.lowerFree[0].tip },
+          { name:'파워 레그프레스 (머신)',    sets:'4세트', reps:'10회', intensity: kg(lp1rm,p),       rest:'90초',  tip: DB.lowerMachine[0].tip },
+          { name: lm[1].name,               sets:'3세트', reps:'10회', intensity:'고강도',            rest:'60초',  tip: lm[1].tip },
+          { name:'원 레그 데드리프트',        sets:'3세트', reps:'10회', intensity:'중강도',            rest:'90초',  tip: DB.lowerFree[4].tip },
+          { name:'카프레이즈 (스탠딩)',       sets:'4세트', reps:'15회', intensity:'중강도',            rest:'45초',  tip: DB.lowerFree[8].tip },
+        ]},
+        { day: '상체 A (화) — 가슴·등', exercises: [
+          { name: cf[0].name,  sets:'4세트', reps:'8회',  intensity: kg(bp1rm,p),  rest:'120초', tip: cf[0].tip },
+          { name: bf[0].name,  sets:'4세트', reps:'8회',  intensity:'중~고강도',   rest:'90초',  tip: bf[0].tip },
+          { name: cf[1].name,  sets:'3세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip: cf[1].tip },
+          { name: bm[0].name,  sets:'3세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip: bm[0].tip },
+          { name: bi[0].name,  sets:'3세트', reps:'10회', intensity:'중강도',      rest:'45초',  tip: bi[0].tip },
+          { name: tri[0].name, sets:'3세트', reps:'10회', intensity:'중강도',      rest:'45초',  tip: tri[0].tip },
+        ]},
+        { day: '하체 B (목) — 머신 볼륨', exercises: [
+          { name:'핵 스쿼트 (머신)',          sets:'4세트', reps:'10회', intensity:'중~고강도',     rest:'90초',  tip: DB.lowerMachine[1].tip },
+          { name:'파워 레그프레스 (발 높게)', sets:'3세트', reps:'12회', intensity: kg(lp1rm,p-10),rest:'90초',  tip: DB.lowerMachine[2].tip },
+          { name: lm[2].name,               sets:'4세트', reps:'10회', intensity:'중강도',        rest:'60초',  tip: lm[2].tip },
+          { name: DB.lowerMachine[4].name,  sets:'3세트', reps:'12회', intensity:'중강도',        rest:'60초',  tip: DB.lowerMachine[4].tip },
+          { name: co[0].name,               sets:'3세트', reps:'60초', intensity:'체중',          rest:'30초',  tip: co[0].tip },
+        ]},
+        { day: '상체 B (토) — 어깨·팔', exercises: [
+          { name: cf[2].name,  sets:'4세트', reps:'10회', intensity:'중강도',      rest:'90초',  tip: cf[2].tip },
+          { name: bf[1].name,  sets:'4세트', reps:'10회', intensity:'중강도',      rest:'90초',  tip: bf[1].tip },
+          { name: sh[0].name,  sets:'3세트', reps:'10회', intensity:'중강도',      rest:'60초',  tip: sh[0].tip },
+          { name: sh[1].name,  sets:'3세트', reps:'15회', intensity:'가벼운 덤벨', rest:'45초',  tip: sh[1].tip },
+          { name: bi[1].name,  sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초',  tip: bi[1].tip },
+          { name: tri[1].name, sets:'3세트', reps:'12회', intensity:'중강도',      rest:'45초',  tip: tri[1].tip },
+        ]},
       ];
     }
   }
@@ -1168,17 +1969,28 @@ function buildPlanFromData(ev) {
   notesList.push('통증(근육통 제외)이 느껴지면 즉시 중단하고 전문가 상담을 받으세요.');
 
   return {
-    schedule: schedules[lvIdx],
+    schedule: getSchedule(),
+    patternLabel,
     strength: { frequency:'주 '+cfg.wDays+'회', duration: lvIdx<=1?'45분':lvIdx<=2?'55분':'65분', split:cfg.split, sessions:makeSessions(cfg.pct[0]) },
-    cardio,
+    cardio: getCardioRx(),
     weekly_progression,
-    notes: '• ' + notesList.join('\n• ')
+    notes: getNotes()
   };
 }
 
 function renderPlan(plan) {
   document.getElementById('planLoading').style.display = 'none';
   document.getElementById('planResult').style.display = 'block';
+
+  // 패턴 라벨 배너
+  if (plan.patternLabel) {
+    const existing = document.getElementById('patternBanner');
+    const banner = existing || document.createElement('div');
+    banner.id = 'patternBanner';
+    banner.style.cssText = 'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13px;font-weight:800;text-align:center;';
+    banner.textContent = plan.patternLabel;
+    if (!existing) document.getElementById('planResult').prepend(banner);
+  }
 
   // 주간 스케줄
   const schedEl = document.getElementById('planSchedule');
