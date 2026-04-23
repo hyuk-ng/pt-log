@@ -1,7 +1,7 @@
 // Body Spectrum Pro — Service Worker
 const CACHE_NAME = 'body-spectrum-v1';
 const URLS = [
-  '/pt-log/피트니스 평가.html',
+  '/pt-log/fitness_eval.html',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
 ];
