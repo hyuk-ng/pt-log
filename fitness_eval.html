@@ -4,7 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="체력측정">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="바디스펙트럼">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f172a">
+<meta name="description" content="퍼스널 트레이너 전용 체력측정 평가 시스템">
+<link rel="manifest" href="manifest.json">
 <title>Body Spectrum Pro | 체력측정평가</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -2107,6 +2112,15 @@ async function savePlanToSheet() {
 
 // ═══ INIT ═══
 loadM();
+
+// ═══ PWA Service Worker 등록 ═══
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(() => console.log('✅ Service Worker 등록 완료'))
+      .catch(e => console.log('Service Worker 등록 실패:', e));
+  });
+}
 </script>
 </body>
 </html>
