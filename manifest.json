@@ -1,0 +1,26 @@
+{
+  "name": "Body Spectrum Pro",
+  "short_name": "바디스펙트럼",
+  "description": "퍼스널 트레이너 전용 체력측정 평가 시스템",
+  "start_url": "/pt-log/피트니스 평가.html",
+  "scope": "/pt-log/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
