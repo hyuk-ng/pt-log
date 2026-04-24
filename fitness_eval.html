@@ -13,6 +13,7 @@
 <title>Body Spectrum Pro | 체력측정평가</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -2312,32 +2313,52 @@ function renderPlan(plan) {
 
   // 근력 프로그램
   const strEl = document.getElementById('planStrength');
+  const qrQueue = [];
   let strHtml = `<div style="background:#f0f0ff;border-radius:10px;padding:10px;margin-bottom:10px;">
     <b>📌 ${plan.strength.frequency} | ${plan.strength.duration} | ${plan.strength.split}</b>
   </div>`;
-  plan.strength.sessions.forEach(session => {
+  plan.strength.sessions.forEach((session, sIdx) => {
     strHtml += `<div style="margin-bottom:12px;">
       <div style="font-size:12px;font-weight:800;color:#6366f1;margin-bottom:6px;padding:4px 10px;background:#f0f0ff;border-radius:6px;display:inline-block;">${session.day}</div>
       <table style="width:100%;border-collapse:collapse;font-size:11px;">
         <tr style="background:#f8fafc;"><th style="padding:6px;text-align:left;font-weight:700;color:#64748b;">운동</th><th style="padding:6px;color:#64748b;">세트</th><th style="padding:6px;color:#64748b;">횟수</th><th style="padding:6px;color:#64748b;">강도</th><th style="padding:6px;color:#64748b;">휴식</th></tr>`;
-    session.exercises.forEach(ex => {
+    session.exercises.forEach((ex, exIdx) => {
       const ytUrl = ex.ytId
         ? `https://youtu.be/${ex.ytId}`
         : `https://www.youtube.com/results?search_query=${encodeURIComponent(ex.name + ' 운동 방법')}`;
+      const qrId = `qr_${sIdx}_${exIdx}`;
       strHtml += `<tr style="border-bottom:1px solid #f1f5f9;">
         <td style="padding:6px;">
-          <div style="font-weight:600;font-size:11px;">${ex.name}</div>
-          <div style="font-size:9px;color:#ef4444;margin-top:2px;">▶ ${ytUrl}</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="flex-shrink:0;text-align:center;">
+              <canvas id="${qrId}" style="width:52px;height:52px;display:block;"></canvas>
+              <div style="font-size:7px;color:#94a3b8;margin-top:1px;">QR→영상</div>
+            </div>
+            <div style="font-weight:600;font-size:11px;line-height:1.4;align-self:center;">${ex.name}</div>
+          </div>
         </td>
         <td style="padding:6px;text-align:center;">${ex.sets}</td>
         <td style="padding:6px;text-align:center;">${ex.reps}</td>
         <td style="padding:6px;text-align:center;color:#6366f1;font-weight:700;">${ex.intensity}</td>
         <td style="padding:6px;text-align:center;">${ex.rest}</td>
       </tr>`;
+      qrQueue.push({ id: qrId, url: ytUrl });
     });
     strHtml += `</table></div>`;
   });
   strEl.innerHTML = strHtml;
+
+  // QR코드 생성 (DOM 렌더링 후)
+  setTimeout(() => {
+    qrQueue.forEach(({ id, url }) => {
+      const canvas = document.getElementById(id);
+      if (canvas && typeof QRCode !== 'undefined') {
+        QRCode.toCanvas(canvas, url, { width: 52, margin: 1, color: { dark:'#1e293b', light:'#ffffff' } }, err => {
+          if (err) console.warn('QR 생성 실패:', id, err);
+        });
+      }
+    });
+  }, 300);
 
   // 유산소 프로그램
   const cardioEl = document.getElementById('planCardio');
