@@ -2383,8 +2383,21 @@ function renderPlan(plan) {
   plan.strength.sessions.forEach((session, sIdx) => {
     strHtml += `<div style="margin-bottom:12px;">
       <div style="font-size:12px;font-weight:800;color:#6366f1;margin-bottom:6px;padding:4px 10px;background:#f0f0ff;border-radius:6px;display:inline-block;">${session.day}</div>
-      <table style="width:100%;border-collapse:collapse;font-size:11px;">
-        <tr style="background:#f8fafc;"><th style="padding:6px;text-align:left;font-weight:700;color:#64748b;">운동</th><th style="padding:6px;color:#64748b;">세트</th><th style="padding:6px;color:#64748b;">횟수</th><th style="padding:6px;color:#64748b;">강도</th><th style="padding:6px;color:#64748b;">휴식</th></tr>`;
+      <table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;">
+        <colgroup>
+          <col style="width:44%;">
+          <col style="width:14%;">
+          <col style="width:14%;">
+          <col style="width:16%;">
+          <col style="width:12%;">
+        </colgroup>
+        <tr style="background:#f8fafc;">
+          <th style="padding:6px;text-align:left;font-weight:700;color:#64748b;border-bottom:2px solid #e2e8f0;">운동</th>
+          <th style="padding:6px;text-align:center;font-weight:700;color:#64748b;border-bottom:2px solid #e2e8f0;">세트</th>
+          <th style="padding:6px;text-align:center;font-weight:700;color:#64748b;border-bottom:2px solid #e2e8f0;">횟수</th>
+          <th style="padding:6px;text-align:center;font-weight:700;color:#64748b;border-bottom:2px solid #e2e8f0;">강도</th>
+          <th style="padding:6px;text-align:center;font-weight:700;color:#64748b;border-bottom:2px solid #e2e8f0;">휴식</th>
+        </tr>`;
     session.exercises.forEach((ex, exIdx) => {
       const ytUrl = ex.ytId
         ? `https://youtu.be/${ex.ytId}`
