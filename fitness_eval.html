@@ -616,73 +616,143 @@ async function analyzeAndSave(){
 
   // 체성분
   analysis+='<div style="margin-bottom:12px;"><b>🔬 체성분 분석</b><br>';
-  if(bmi>0 && bf>0){
-    const bfStd = gender==='남' ? {good:15, avg:20, high:25} : {good:22, avg:28, high:33};
-    const bfGood  = bf <= bfStd.good;
-    const bfNorm  = bf <= bfStd.avg  && !bfGood;
-    const bfOver  = bf <= bfStd.high && !bfGood && !bfNorm;
-    const bfHigh  = bf >  bfStd.high;
+  if(bmi>0 || bf>0 || smm>0){
+    const bfStd  = gender==='남' ? {good:15, avg:20, high:25} : {good:22, avg:28, high:33};
+    // 골격근량 기준 (성별×체중 비율)
+    const smmStd = gender==='남'
+      ? { high: w*0.45, low: w*0.37 }   // 남성: 체중의 45%↑ 높음, 37%↓ 낮음
+      : { high: w*0.37, low: w*0.30 };  // 여성: 체중의 37%↑ 높음, 30%↓ 낮음
 
-    const bmiLow  = bmi < 18.5;
-    const bmiNorm = bmi >= 18.5 && bmi < 23;
-    const bmiOvW  = bmi >= 23   && bmi < 25;
-    const bmiObe  = bmi >= 25;
+    const bfGood = bf>0 && bf <= bfStd.good;
+    const bfNorm = bf>0 && bf <= bfStd.avg  && !bfGood;
+    const bfOver = bf>0 && bf <= bfStd.high && !bfGood && !bfNorm;
+    const bfHigh = bf>0 && bf >  bfStd.high;
 
-    analysis += '<b>📊 체성분 종합 분석</b><br>';
+    const bmiLow = bmi>0 && bmi < 18.5;
+    const bmiNorm= bmi>0 && bmi >= 18.5 && bmi < 23;
+    const bmiOvW = bmi>0 && bmi >= 23   && bmi < 25;
+    const bmiObe = bmi>0 && bmi >= 25;
 
-    // ── 저체중 (BMI < 18.5) ──
-    if(bmiLow && bfGood)
-      analysis += 'BMI '+bmi+'(저체중) / 체지방 '+bf+'%(우수) — <span style="color:#3b82f6">근육 부족형 저체중</span>입니다. 체중은 낮지만 체지방도 낮아 근육량 자체가 부족한 상태입니다. 고단백 식단(체중 1kg당 2.0~2.2g)과 근력 운동으로 근육량 증가를 최우선 목표로 하세요.<br>';
-    else if(bmiLow && bfNorm)
-      analysis += 'BMI '+bmi+'(저체중) / 체지방 '+bf+'%(표준) — <span style="color:#3b82f6">전반적 저체중</span>입니다. 체중과 근육량이 모두 부족합니다. 전신 근력 운동과 칼로리 증가(+300~500kcal/일)를 병행하세요.<br>';
-    else if(bmiLow && bfOver)
-      analysis += 'BMI '+bmi+'(저체중) / 체지방 '+bf+'%(표준이상) — <span style="color:#f97316">저체중 마른비만</span>입니다. 체중은 낮지만 지방 비율이 높고 근육이 매우 부족한 상태입니다. 근력 운동을 최우선으로 하고 단백질 섭취를 늘리세요.<br>';
-    else if(bmiLow && bfHigh)
-      analysis += 'BMI '+bmi+'(저체중) / 체지방 '+bf+'%(높음) — <span style="color:#ef4444">심각한 근감소 상태</span>입니다. 체중이 낮음에도 체지방률이 높아 근육이 극히 부족합니다. 의료진 상담 후 단계적 근력 운동을 시작하세요.<br>';
+    const smmHigh= smm>0 && smm >= smmStd.high;
+    const smmNorm= smm>0 && smm >= smmStd.low && smm < smmStd.high;
+    const smmLow = smm>0 && smm <  smmStd.low;
+    const noSmm  = smm <= 0;
 
-    // ── 정상 (BMI 18.5~22.9) ──
-    else if(bmiNorm && bfGood)
-      analysis += 'BMI '+bmi+'(정상) / 체지방 '+bf+'%(우수) — <span style="color:#10b981">이상적인 체성분</span>입니다. 체중과 체지방 모두 최적 상태입니다. 현재를 유지하면서 근력 향상에 집중하세요.<br>';
-    else if(bmiNorm && bfNorm)
-      analysis += 'BMI '+bmi+'(정상) / 체지방 '+bf+'%(표준) — <span style="color:#10b981">양호한 체성분</span>입니다. 균형 잡힌 상태입니다. 근력+유산소 병행으로 체지방 비율을 조금 더 낮춰보세요.<br>';
-    else if(bmiNorm && bfOver)
-      analysis += 'BMI '+bmi+'(정상) / 체지방 '+bf+'%(표준이상) — <span style="color:#f97316">마른비만 경계</span>입니다. BMI는 정상이지만 체지방이 높고 근육이 부족합니다. 유산소보다 근력 운동 비중을 높이세요.<br>';
-    else if(bmiNorm && bfHigh)
-      analysis += 'BMI '+bmi+'(정상) / 체지방 '+bf+'%(높음) — <span style="color:#ef4444">마른비만(Skinny Fat)</span>입니다. 겉보기엔 정상이지만 지방이 많고 근육이 매우 부족합니다. 근력 운동 + 식단 관리를 동시에 진행하세요.<br>';
+    // 체형 판정 함수 — 3가지 지표 종합
+    function getBodyType() {
+      // ── 저체중 ──
+      if(bmiLow){
+        if(bfGood && (smmLow||noSmm))  return { type:'근육부족 저체중',   color:'#3b82f6', icon:'🔵' };
+        if(bfGood && smmNorm)          return { type:'마른 정상체형',      color:'#10b981', icon:'🟢' };
+        if(bfGood && smmHigh)          return { type:'근육형 저체중',      color:'#10b981', icon:'🟢' };
+        if(bfNorm && (smmLow||noSmm))  return { type:'전반적 저체중',      color:'#3b82f6', icon:'🔵' };
+        if(bfNorm && smmNorm)          return { type:'저체중 보통체형',    color:'#3b82f6', icon:'🔵' };
+        if(bfOver || bfHigh)           return { type:'저체중 마른비만',    color:'#f97316', icon:'🟠' };
+        return { type:'저체중',                                            color:'#3b82f6', icon:'🔵' };
+      }
+      // ── 정상 BMI ──
+      if(bmiNorm){
+        if(bfGood && smmHigh)          return { type:'이상적 근육체형',    color:'#10b981', icon:'🟢' };
+        if(bfGood && smmNorm)          return { type:'이상적 체성분',      color:'#10b981', icon:'🟢' };
+        if(bfGood && (smmLow||noSmm))  return { type:'체지방 우수 / 근육 부족', color:'#3b82f6', icon:'🔵' };
+        if(bfNorm && smmHigh)          return { type:'근육 우수 / 체지방 관리 권장', color:'#10b981', icon:'🟢' };
+        if(bfNorm && smmNorm)          return { type:'균형 체형',          color:'#10b981', icon:'🟢' };
+        if(bfNorm && (smmLow||noSmm))  return { type:'근육 부족 체형',     color:'#f97316', icon:'🟠' };
+        if((bfOver||bfHigh) && smmHigh)return { type:'근육형 마른비만',   color:'#f97316', icon:'🟠' };
+        if((bfOver||bfHigh) && smmNorm)return { type:'마른비만 경계',      color:'#f97316', icon:'🟠' };
+        if((bfOver||bfHigh) && (smmLow||noSmm)) return { type:'마른비만 (Skinny Fat)', color:'#ef4444', icon:'🔴' };
+        return { type:'정상 체형',                                         color:'#10b981', icon:'🟢' };
+      }
+      // ── 과체중 경계 ──
+      if(bmiOvW){
+        if(bfGood && smmHigh)          return { type:'고근육 체형 (BMI 과대평가)', color:'#10b981', icon:'🟢' };
+        if(bfGood && smmNorm)          return { type:'근육형 체형',        color:'#10b981', icon:'🟢' };
+        if(bfGood && (smmLow||noSmm))  return { type:'체지방 양호 / 근육 보강 필요', color:'#3b82f6', icon:'🔵' };
+        if(bfNorm && smmHigh)          return { type:'근육형 과체중',      color:'#3b82f6', icon:'🔵' };
+        if(bfNorm && (smmNorm||smmLow||noSmm)) return { type:'체중·체지방 관리 필요', color:'#f97316', icon:'🟠' };
+        if((bfOver||bfHigh) && smmHigh)return { type:'체지방 감소 필요 (근육은 우수)', color:'#f97316', icon:'🟠' };
+        if((bfOver||bfHigh) && smmNorm)return { type:'체지방 집중 감소 필요', color:'#f97316', icon:'🟠' };
+        if((bfOver||bfHigh) && (smmLow||noSmm)) return { type:'비만 진행형',  color:'#ef4444', icon:'🔴' };
+        return { type:'과체중 경계',                                       color:'#f97316', icon:'🟠' };
+      }
+      // ── 비만 ──
+      if(bmiObe){
+        if(bfGood && smmHigh)          return { type:'고중량 근육형 (운동선수형)', color:'#10b981', icon:'🟢' };
+        if(bfGood && smmNorm)          return { type:'근육형 (BMI 과대평가)',     color:'#10b981', icon:'🟢' };
+        if(bfGood && (smmLow||noSmm))  return { type:'체지방 양호 / 과체중',      color:'#3b82f6', icon:'🔵' };
+        if(bfNorm && smmHigh)          return { type:'근육형 과체중',             color:'#3b82f6', icon:'🔵' };
+        if(bfNorm && (smmNorm||noSmm)) return { type:'복합 관리 필요',            color:'#f97316', icon:'🟠' };
+        if(bfNorm && smmLow)           return { type:'근육 부족 비만',            color:'#f97316', icon:'🟠' };
+        if((bfOver||bfHigh) && smmHigh)return { type:'고체지방 / 근육도 많음',   color:'#f97316', icon:'🟠' };
+        if((bfOver||bfHigh) && smmNorm)return { type:'비만',                     color:'#ef4444', icon:'🔴' };
+        if((bfOver||bfHigh) && (smmLow||noSmm)) return { type:'고도비만 / 근육 부족', color:'#ef4444', icon:'🔴' };
+        return { type:'비만',                                              color:'#ef4444', icon:'🔴' };
+      }
+      return null;
+    }
 
-    // ── 과체중 경계 (BMI 23~24.9) ──
-    else if(bmiOvW && bfGood)
-      analysis += 'BMI '+bmi+'(과체중경계) / 체지방 '+bf+'%(우수) — <span style="color:#10b981">근육형 체형</span>입니다. BMI가 높게 나왔지만 체지방이 낮으므로 이는 근육량이 많아서입니다. BMI보다 체지방률이 더 정확한 지표이며, 현재 체성분은 매우 양호합니다.<br>';
-    else if(bmiOvW && bfNorm)
-      analysis += 'BMI '+bmi+'(과체중경계) / 체지방 '+bf+'%(표준) — <span style="color:#3b82f6">체중 관리 필요</span>입니다. 체지방은 표준이나 체중이 다소 높습니다. 근력 유지하면서 유산소로 체중을 조금 줄여보세요.<br>';
-    else if(bmiOvW && bfOver)
-      analysis += 'BMI '+bmi+'(과체중경계) / 체지방 '+bf+'%(표준이상) — <span style="color:#f97316">체지방 감소 필요</span>입니다. 체중과 체지방 모두 높은 편입니다. 주 4회 이상 유산소+근력 병행과 식이 관리가 필요합니다.<br>';
-    else if(bmiOvW && bfHigh)
-      analysis += 'BMI '+bmi+'(과체중경계) / 체지방 '+bf+'%(높음) — <span style="color:#ef4444">체지방 집중 감소 필요</span>입니다. 체중과 체지방 모두 높습니다. 저강도 유산소부터 시작해 점진적으로 강도를 높이고 식단 관리를 병행하세요.<br>';
+    // 체형별 처방 코멘트
+    function getBodyAdvice(type) {
+      const map = {
+        '근육부족 저체중':      '체중과 근육 모두 부족합니다. 고단백 식단(체중×2.0~2.2g)과 전신 근력 운동을 최우선으로 진행하세요.',
+        '마른 정상체형':        '체지방은 낮고 근육은 적당하지만 체중이 낮습니다. 칼로리를 +300kcal/일 늘리고 근력 운동을 꾸준히 하세요.',
+        '근육형 저체중':        '체지방이 낮고 근육이 있지만 전체 체중이 낮습니다. 근력 훈련 강도를 높이고 식사량을 조금 늘려보세요.',
+        '전반적 저체중':        '체중·근육 모두 부족합니다. 전신 근력 운동과 하루 300~500kcal 추가 섭취를 병행하세요.',
+        '저체중 보통체형':      '체중은 낮지만 체지방·근육은 표준입니다. 근력 운동으로 근육을 늘리면 체중도 자연스럽게 올라갑니다.',
+        '저체중 마른비만':      '체중은 낮지만 지방 비율이 높고 근육이 부족합니다. 근력 운동이 최우선이며 고단백 식단을 병행하세요.',
+        '저체중':               '체중이 낮습니다. 칼로리와 단백질 섭취를 늘리고 근력 운동을 시작하세요.',
+        '이상적 근육체형':      '체지방·근육량·BMI 모두 최적입니다. 현재 상태를 유지하며 근력 향상에 집중하세요.',
+        '이상적 체성분':        '세 가지 지표 모두 정상 범위입니다. 현재 루틴을 유지하면서 강도를 점진적으로 높이세요.',
+        '체지방 우수 / 근육 부족': '체지방은 낮지만 근육량이 부족합니다. 근력 운동 볼륨을 늘리고 단백질 섭취를 확인하세요.',
+        '근육 우수 / 체지방 관리 권장': '근육량은 좋지만 체지방이 조금 높습니다. 유산소를 주 2~3회 추가하면 체지방을 낮출 수 있습니다.',
+        '균형 체형':            '세 가지 지표 모두 균형 잡혀 있습니다. 근력+유산소 병행으로 체지방을 조금 더 낮춰보세요.',
+        '근육 부족 체형':       '체지방은 표준이지만 근육이 부족합니다. 근력 운동을 주 3회 이상 진행하고 단백질 섭취를 늘리세요.',
+        '근육형 마른비만':      '근육량은 많지만 체지방도 높습니다. 유산소와 식이조절로 체지방을 줄이면 이상적인 체형이 됩니다.',
+        '마른비만 경계':        'BMI는 정상이지만 체지방이 높고 근육이 보통입니다. 근력 운동 우선, 유산소 병행을 권장합니다.',
+        '마른비만 (Skinny Fat)':'겉보기엔 정상이지만 지방이 많고 근육이 매우 부족합니다. 근력 운동이 핵심이며 식단 관리를 동시에 진행하세요.',
+        '정상 체형':            '체성분이 정상 범위입니다. 꾸준한 운동으로 현재 상태를 유지하세요.',
+        '고근육 체형 (BMI 과대평가)': '근육이 많아 BMI가 높게 나왔습니다. BMI보다 체지방률이 정확한 지표이며 현재 체성분은 매우 우수합니다.',
+        '근육형 체형':          'BMI가 높지만 체지방이 낮아 근육이 많은 덕분입니다. 체성분은 양호하며 근력 유지에 집중하세요.',
+        '체지방 양호 / 근육 보강 필요': '체지방은 낮지만 근육이 부족합니다. 근력 운동 볼륨을 늘려 근육량을 보강하세요.',
+        '근육형 과체중':        '근육량이 많아 체중이 높습니다. 체지방은 표준이므로 근력 유지하면서 체중 변화를 모니터링하세요.',
+        '체중·체지방 관리 필요':'체중과 체지방 모두 관리가 필요합니다. 근력+유산소를 병행하고 식이조절을 시작하세요.',
+        '체지방 감소 필요 (근육은 우수)': '근육은 충분하지만 체지방이 높습니다. 유산소 빈도를 늘리고 탄수화물 섭취를 조절하세요.',
+        '체지방 집중 감소 필요':'체지방을 줄이는 것이 최우선입니다. 유산소 주 4회 이상과 식이조절을 병행하세요.',
+        '비만 진행형':          '체중·체지방 모두 높고 근육이 부족합니다. 저강도 유산소부터 시작해 점진적으로 강도를 높이세요.',
+        '과체중 경계':          '체중 관리가 필요합니다. 유산소와 근력 운동을 병행하세요.',
+        '고중량 근육형 (운동선수형)': '근육이 매우 많아 BMI가 높습니다. 체성분은 우수하며 기능성 훈련과 부상 방지에 집중하세요.',
+        '근육형 (BMI 과대평가)': 'BMI가 높지만 체지방이 낮아 근육 덕분입니다. 현재 체성분은 양호합니다.',
+        '체지방 양호 / 과체중':  '체지방은 괜찮지만 전체 체중이 높습니다. 근력 유지하면서 가벼운 유산소를 추가하세요.',
+        '복합 관리 필요':        '체중·체지방 모두 높습니다. 저충격 유산소(수영, 자전거)부터 시작하세요.',
+        '근육 부족 비만':        '체중이 높고 근육이 부족합니다. 근력 운동과 유산소를 동시에 진행하세요.',
+        '고체지방 / 근육도 많음':'근육은 많지만 체지방도 높습니다. 식이조절과 유산소로 체지방을 줄이세요.',
+        '비만':                 '체중과 체지방을 줄이는 것이 최우선입니다. 전문가와 함께 단계적 운동 계획을 세우세요.',
+        '고도비만 / 근육 부족':  '체중·체지방이 높고 근육이 부족합니다. 의료진과 상담 후 저강도 유산소부터 시작하세요.',
+      };
+      return map[type] || '전문 트레이너와 상담하여 개인화된 운동 계획을 수립하세요.';
+    }
 
-    // ── 비만 (BMI ≥ 25) ──
-    else if(bmiObe && bfGood)
-      analysis += 'BMI '+bmi+'(비만) / 체지방 '+bf+'%(우수) — <span style="color:#10b981">고근육 근육형 체형</span>입니다. BMI가 높지만 체지방이 매우 낮으므로 근육량이 상당히 많은 상태입니다. 체성분 자체는 우수하며 부상 방지와 기능성 훈련에 집중하세요.<br>';
-    else if(bmiObe && bfNorm)
-      analysis += 'BMI '+bmi+'(비만) / 체지방 '+bf+'%(표준) — <span style="color:#3b82f6">근육형 과체중</span>입니다. 근육량이 많아 BMI가 높게 나온 경향이 있습니다. 현재 체지방은 표준이므로 근력 유지하면서 체중 변화를 모니터링하세요.<br>';
-    else if(bmiObe && bfOver)
-      analysis += 'BMI '+bmi+'(비만) / 체지방 '+bf+'%(표준이상) — <span style="color:#f97316">복합 관리 필요</span>입니다. 체중과 체지방 모두 높습니다. 관절 부담을 줄이는 저충격 유산소(수영, 자전거)부터 시작하세요.<br>';
-    else if(bmiObe && bfHigh)
-      analysis += 'BMI '+bmi+'(비만) / 체지방 '+bf+'%(높음) — <span style="color:#ef4444">적극적 체중 관리 필요</span>입니다. 체중과 체지방 모두 높은 상태입니다. 저강도 유산소부터 시작하고 전문 영양 상담을 권장합니다.<br>';
+    const bt = getBodyType();
+    if(bt) {
+      // 수치 표시 라인
+      let nums = [];
+      if(bmi>0) nums.push('BMI <b>'+bmi+'</b>');
+      if(bf>0)  nums.push('체지방률 <b>'+bf+'%</b>');
+      if(smm>0) nums.push('골격근량 <b>'+smm+'kg</b>');
 
-  } else if(bmi>0) {
-    // 체지방률 없을 때 BMI만
-    if(bmi<18.5) analysis+='BMI '+bmi+'로 <span style="color:#3b82f6">저체중</span>입니다. 근육량 증가를 위한 저항 운동과 단백질 섭취를 권장합니다.<br>';
-    else if(bmi<23) analysis+='BMI '+bmi+'로 <span style="color:#10b981">정상 범위</span>입니다.<br>';
-    else if(bmi<25) analysis+='BMI '+bmi+'로 <span style="color:#f97316">과체중 경계</span>입니다. 유산소와 식이 관리를 병행하세요.<br>';
-    else analysis+='BMI '+bmi+'로 <span style="color:#ef4444">비만 구간</span>입니다. 저충격 유산소부터 시작하세요.<br>';
-  } else if(bf>0) {
-    // BMI 없을 때 체지방률만
-    const bfStd=gender==='남'?{good:15,avg:20,high:25}:{good:22,avg:28,high:33};
-    if(bf<=bfStd.good) analysis+='체지방률 '+bf+'%로 <span style="color:#10b981">우수</span>합니다.<br>';
-    else if(bf<=bfStd.avg) analysis+='체지방률 '+bf+'%로 <span style="color:#3b82f6">표준</span>입니다.<br>';
-    else if(bf<=bfStd.high) analysis+='체지방률 '+bf+'%로 <span style="color:#f97316">표준이상</span>입니다.<br>';
-    else analysis+='체지방률 '+bf+'%로 <span style="color:#ef4444">높음</span>입니다.<br>';
+      analysis += '<b>📊 체성분 종합 분석</b><br>';
+      analysis += nums.join(' / ') + '<br>';
+      analysis += bt.icon + ' <b><span style="color:'+bt.color+'">'+bt.type+'</span></b><br>';
+      analysis += getBodyAdvice(bt.type) + '<br>';
+
+      // BMI만 있는 경우 보완 안내
+      if(bmi>0 && bf<=0 && smm<=0)
+        analysis += '💡 체지방률·골격근량을 함께 입력하면 더 정확한 체성분 분석이 가능합니다.<br>';
+      // BMI+체지방만 있는 경우
+      else if(bmi>0 && bf>0 && smm<=0)
+        analysis += '💡 골격근량을 함께 입력하면 근육형/마른비만 여부를 더 정확하게 판별할 수 있습니다.<br>';
+    }
+
   }
   if(waist>0){
     const waistRisk=gender==='남'?90:85;
