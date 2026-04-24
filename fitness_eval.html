@@ -358,6 +358,7 @@ select.fi{cursor:pointer;}
         <!-- 저장 버튼 -->
         <div class="btn-row">
           <button class="btn btn-cap" onclick="capturePlan()">📸 이미지 저장</button>
+          <button class="btn btn-save" onclick="exportPlanPDF()">📄 PDF 저장</button>
           <button class="btn btn-save" onclick="savePlanToSheet()">💾 시트 저장</button>
         </div>
       </div>
@@ -2402,6 +2403,131 @@ async function capturePlan() {
     a.href = url; a.download = currentPlanMember + '_운동플랜.png'; a.click();
     toast('✅ 이미지 저장!');
   }, 'image/png');
+}
+
+async function exportPlanPDF() {
+  if (!window._lastPlan) { toast('⚠️ 먼저 운동 프로그램을 생성하세요!'); return; }
+  toast('⏳ PDF 생성중...');
+
+  const plan = window._lastPlan;
+  const name = currentPlanMember || '회원';
+  const date = new Date().toLocaleDateString('ko-KR');
+
+  // 세션 HTML 생성 (YouTube 링크 포함)
+  let sessionsHtml = '';
+  if (plan.strength && plan.strength.sessions) {
+    plan.strength.sessions.forEach(session => {
+      sessionsHtml += `
+        <div style="margin-bottom:16px;">
+          <div style="background:#6366f1;color:white;padding:6px 12px;border-radius:6px;font-weight:700;font-size:13px;display:inline-block;margin-bottom:8px;">${session.day}</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <tr style="background:#f8fafc;">
+              <th style="padding:6px;text-align:left;border:1px solid #e2e8f0;color:#64748b;">운동</th>
+              <th style="padding:6px;border:1px solid #e2e8f0;color:#64748b;">세트</th>
+              <th style="padding:6px;border:1px solid #e2e8f0;color:#64748b;">횟수</th>
+              <th style="padding:6px;border:1px solid #e2e8f0;color:#64748b;">강도</th>
+              <th style="padding:6px;border:1px solid #e2e8f0;color:#64748b;">휴식</th>
+            </tr>`;
+      session.exercises.forEach(ex => {
+        const ytUrl = ex.ytId
+          ? `https://www.youtube.com/watch?v=${ex.ytId}`
+          : `https://www.youtube.com/results?search_query=${encodeURIComponent(ex.name + ' 운동 방법')}`;
+        sessionsHtml += `
+            <tr>
+              <td style="padding:6px;border:1px solid #e2e8f0;font-weight:600;">
+                <a href="${ytUrl}" style="color:#1e293b;text-decoration:none;">
+                  <span style="background:#ff0000;color:white;border-radius:3px;padding:1px 4px;font-size:9px;margin-right:4px;">▶</span>${ex.name}
+                </a>
+              </td>
+              <td style="padding:6px;border:1px solid #e2e8f0;text-align:center;">${ex.sets}</td>
+              <td style="padding:6px;border:1px solid #e2e8f0;text-align:center;">${ex.reps}</td>
+              <td style="padding:6px;border:1px solid #e2e8f0;text-align:center;color:#6366f1;font-weight:700;">${ex.intensity}</td>
+              <td style="padding:6px;border:1px solid #e2e8f0;text-align:center;">${ex.rest}</td>
+            </tr>`;
+        // 팁 행
+        if (ex.tip) {
+          sessionsHtml += `
+            <tr>
+              <td colspan="5" style="padding:4px 6px;border:1px solid #e2e8f0;background:#f0f9ff;font-size:10px;color:#0369a1;">💡 ${ex.tip}</td>
+            </tr>`;
+        }
+      });
+      sessionsHtml += `</table></div>`;
+    });
+  }
+
+  // 유산소 HTML
+  let cardioHtml = '';
+  if (plan.cardio) {
+    const c = plan.cardio;
+    cardioHtml = `
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;">
+        <tr><td style="padding:5px;border:1px solid #e2e8f0;font-weight:600;width:30%;">빈도</td><td style="padding:5px;border:1px solid #e2e8f0;">${c.frequency||'-'}</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e2e8f0;font-weight:600;">운동 종류</td><td style="padding:5px;border:1px solid #e2e8f0;">${c.type||'-'}</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e2e8f0;font-weight:600;">목표 심박수</td><td style="padding:5px;border:1px solid #e2e8f0;">${c.targetHR||'-'}</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e2e8f0;font-weight:600;">시간</td><td style="padding:5px;border:1px solid #e2e8f0;">${c.duration||'-'}</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e2e8f0;font-weight:600;">구성</td><td style="padding:5px;border:1px solid #e2e8f0;">${c.structure||'-'}</td></tr>
+      </table>`;
+  }
+
+  // 주의사항
+  const notesHtml = plan.notes ? `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px;font-size:11px;line-height:1.8;color:#92400e;white-space:pre-line;">${plan.notes}</div>` : '';
+
+  // 패턴 라벨
+  const labelHtml = plan.patternLabel ? `<div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:800;text-align:center;margin-bottom:14px;">${plan.patternLabel}</div>` : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>${name} 운동플랜</title>
+<style>
+  body { font-family: 'Malgun Gothic', Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #1e293b; }
+  h1 { color: #0f172a; border-bottom: 3px solid #6366f1; padding-bottom: 8px; }
+  h2 { color: #6366f1; font-size: 15px; margin: 20px 0 8px; }
+  .info { background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 12px; }
+  a { color: inherit; }
+  @media print { body { padding: 10px; } }
+</style>
+</head>
+<body>
+  <h1>🏋️ Body Spectrum Pro — 맞춤 운동 플랜</h1>
+  <div class="info">
+    <strong>회원명:</strong> ${name} &nbsp;|&nbsp;
+    <strong>생성일:</strong> ${date} &nbsp;|&nbsp;
+    <strong>빈도:</strong> ${plan.strength?.frequency||'-'} &nbsp;|&nbsp;
+    <strong>분할:</strong> ${plan.strength?.split||'-'}
+  </div>
+  ${labelHtml}
+  <h2>💪 근력 운동 프로그램</h2>
+  ${sessionsHtml}
+  <h2>🏃 유산소 운동 프로그램</h2>
+  ${cardioHtml}
+  <h2>⚠️ 주의사항 및 처방 노트</h2>
+  ${notesHtml}
+  <div style="margin-top:20px;text-align:center;font-size:10px;color:#94a3b8;">
+    Body Spectrum Pro | 운동 이름의 ▶ 버튼을 클릭하면 YouTube 영상으로 연결됩니다
+  </div>
+</body>
+</html>`;
+
+  // Blob으로 새 탭 열기 → 인쇄/저장
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (win) {
+    win.onload = () => {
+      setTimeout(() => { win.print(); }, 500);
+    };
+    toast('✅ PDF 창이 열렸어요! 인쇄 → PDF로 저장 선택하세요');
+  } else {
+    // 팝업 차단 시 직접 다운로드
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name + '_운동플랜.html';
+    a.click();
+    toast('✅ HTML 파일로 저장됐어요! 브라우저에서 열어 인쇄하세요');
+  }
 }
 
 async function savePlanToSheet() {
